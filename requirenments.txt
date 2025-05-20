@@ -1,0 +1,6 @@
+aiogram
+pymysql
+dbutils
+redis
+jwt
+passlib
