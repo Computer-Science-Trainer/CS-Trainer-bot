@@ -220,3 +220,21 @@ def get_user_by_id(user_id: int) -> dict | None:
     keys = ['id', 'email', 'password', 'username', 'achievement', 'avatar',
             'verified', 'verification_code', 'telegram', 'github', 'website', 'bio']
     return dict(zip(keys, row))
+
+
+def get_user_by_telegram(telegram: str) -> dict | None:
+    row = execute(
+        """
+        SELECT id, email, password, username, achievement, avatar, verified, verification_code,
+               telegram, github, website, bio
+        FROM users WHERE telegram = %s
+        """,
+        (telegram,), fetchone=True
+    )
+    if not row:
+        return None
+    keys = [
+        'id', 'email', 'password', 'username', 'achievement', 'avatar',
+        'verified', 'verification_code', 'telegram', 'github', 'website', 'bio'
+    ]
+    return dict(zip(keys, row))

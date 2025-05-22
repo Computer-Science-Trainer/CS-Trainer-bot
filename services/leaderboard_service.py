@@ -3,10 +3,10 @@ from database import execute, redis_client
 
 
 def get_leaderboard(number_of_users: int = 10) -> dict:
-    cache_key = f"leaderboard:{number_of_users}"
-    cached = redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached)
+    # cache_key = f"leaderboard:{number_of_users}"
+    # cached = redis_client.get(cache_key)
+    # if cached:
+    #     return json.loads(cached)
     fund_query = """
         SELECT f.id, f.user_id, f.score, f.testsPassed, f.totalTests, f.lastActivity,
                u.username, u.achievement, u.avatar
@@ -44,5 +44,5 @@ def get_leaderboard(number_of_users: int = 10) -> dict:
     ]
 
     result = {'fundamentals': fundamentals, 'algorithms': algorithms}
-    redis_client.setex(cache_key, 60, json.dumps(result, default=str))
+    # redis_client.setex(cache_key, 60, json.dumps(result, default=str))
     return result

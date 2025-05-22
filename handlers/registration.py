@@ -29,7 +29,8 @@ def register_handlers(dp):
         text = ('Привет! Тебе нужна помощь в подготовке к Зайцеву?\nТы по адресу! '
                 'Но для начала, давай проверим твою регистрацию.\n'
                 '(Даже если ее нет, просто следуй инструкции.) \n Введи свою почту:')
-        await message.answer(text)
+        remove_keyboard = types.ReplyKeyboardRemove()
+        await message.answer(text, reply_markup=remove_keyboard)
         await state.set_state(Registration.email)
 
     @dp.message(Registration.email)
@@ -51,6 +52,12 @@ def register_handlers(dp):
         user = get_user_by_email(data['email'])
         if user:
             if verify_password(data['password'], user['password']) and user['verified'] == True:
+                if change_db_users(user['email'], ('telegram', message.from_user.username)) != 'success':
+                    error(f"DB save failed for user {user['email']}. Data: telegram")
+                    await message.answer(
+                        "🔧 Техническая ошибка. Администратор уже уведомлён",
+                        reply_markup=types.ReplyKeyboardRemove()
+                    )
                 await message.answer(f'Ваша регистрация подтверждена. {user['username']}, давай начнём.')
                 await state.clear()
             elif not verify_password(data['password'], user['password']):

@@ -54,10 +54,10 @@ def award_achievement(user_id: int, code: str) -> bool:
 
 
 def get_user_achievements(user_id: int) -> list[dict]:
-    cache_key = f"user:{user_id}:achievements"
-    cached = redis_client.get(cache_key)
-    if cached:
-        return json.loads(cached)
+    # cache_key = f"user:{user_id}:achievements"
+    # cached = redis_client.get(cache_key)
+    # if cached:
+    #     return json.loads(cached)
     rows = execute(
         "SELECT ua.unlocked_at, a.code, a.emoji"
         " FROM user_achievements ua"
@@ -74,12 +74,12 @@ def get_user_achievements(user_id: int) -> list[dict]:
             'unlocked_at': r[0]
         })
     cache_list = []
-    for a in result:
-        item = a.copy()
-        if item['unlocked_at'] is not None:
-            item['unlocked_at'] = item['unlocked_at'].isoformat()
-        cache_list.append(item)
-    redis_client.setex(cache_key, 15, json.dumps(cache_list))
+    # for a in result:
+    #     item = a.copy()
+    #     if item['unlocked_at'] is not None:
+    #         item['unlocked_at'] = item['unlocked_at'].isoformat()
+    #     cache_list.append(item)
+    # redis_client.setex(cache_key, 15, json.dumps(cache_list))
     return result
 
 

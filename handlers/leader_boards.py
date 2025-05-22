@@ -53,9 +53,9 @@ def register_leadboard_handlers(dp):
             topic = 'algorithms'
         else:
             topic = 'fundamentals'
-        leaders = get_leaderboard(data['quantity'])
-        await message.answer(
-            f"Топ-{data['quantity']} лидеров по теме '{topic}':\n{leaders[topic]}",
-            reply_markup=types.ReplyKeyboardRemove()
-        )
+        leaders = get_leaderboard(data['quantity'])[topic]
+        text = f"Топ-{data['quantity']} лидеров по теме '{data['topic']}':\n"
+        for i in leaders:
+            text += i['username'] + ' ' + str(i['score']) + '\n'
+        await message.answer(text, reply_markup=types.ReplyKeyboardRemove())
         await state.clear()

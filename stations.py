@@ -9,3 +9,10 @@ class Registration(StatesGroup):
 class LeaderBoard(StatesGroup):
     quantity = State()
     topic = State()
+
+class Tests(StatesGroup):
+    type_of_test = State()
+    total_topic = State()
+    recommended_test = State()
+    topic = State()
+
