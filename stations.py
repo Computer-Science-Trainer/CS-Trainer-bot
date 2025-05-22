@@ -5,3 +5,7 @@ class Registration(StatesGroup):
     password = State()
     verification = State()
     name = State()
+
+class LeaderBoard(StatesGroup):
+    quantity = State()
+    topic = State()

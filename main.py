@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 from handlers.registration import register_handlers
-from handlers.test_commands import register_test_handlers
+from handlers.leader_boards import register_leadboard_handlers
 
 logging.basicConfig(level=logging.INFO)
 
@@ -17,14 +17,13 @@ if not TOKEN:
 bot = Bot(TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# Register handlers
 register_handlers(dp)
-register_test_handlers(dp)
+register_leadboard_handlers(dp)
 
 async def main():
     await bot.set_my_commands([
         BotCommand(command="start", description="Запуск бота"),
-        BotCommand(command="test1", description="Тестовая команда 1"),
+        BotCommand(command="leader_board", description="Тестовая команда 1"),
     ])
     await dp.start_polling(bot)
 
