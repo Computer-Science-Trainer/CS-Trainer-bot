@@ -1,9 +1,11 @@
 import os
 import jwt
 import datetime
+from dotenv import load_dotenv
 from typing import Optional
 from passlib.context import CryptContext
 
+load_dotenv()
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not SECRET_KEY:
     raise ValueError("JWT_SECRET_KEY environment variable is not set")

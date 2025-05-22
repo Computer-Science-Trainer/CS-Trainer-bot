@@ -2,10 +2,9 @@ import os
 import asyncio
 import logging
 from dotenv import load_dotenv
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters.command import Command
+from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, BotCommand
+from aiogram.types import BotCommand
 from handlers.registration import register_handlers
 from handlers.test_commands import register_test_handlers
 
