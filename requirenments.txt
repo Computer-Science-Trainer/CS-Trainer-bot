@@ -1,0 +1,8 @@
+aiogram
+pymysql
+dbutils
+redis
+jwt
+passlib
+sqlalchemy
+models
