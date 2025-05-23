@@ -4,7 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters.command import Command
-from services.test_service import get_test, update_questions, get_questions
+from services.test_service import get_test, update_questions, get_questions, ending
 from services.user_service import get_user_by_telegram, save_user_test
 
 def register_tests_handlers(dp):
@@ -81,12 +81,17 @@ def register_tests_handlers(dp):
         data = await state.get_data()
         await state.update_data(cur_test=data['cur_test'] + 1)
         questions = data['questions']
-        questions[data['cur_test']]['answer'] = message.text
+        questions[data['cur_test']]['user_answer'] = message.text
         await state.update_data(questions=questions)
         if data['cur_test'] + 1 < 10:
             await state.update_data(cur_test=data['cur_test'] + 1)
             await message.answer(data['questions'][data['cur_test'] + 1]['question_text'])
             return
-        print(data['questions'])
+        passed = total = average = earned_score = 0
+        for i in data['questions']:
+            if i['answer'] == i['user_answer']:
+                passed += 1
+                earned_score += 10 * i['difficulty']
+        ending(data['test_id'], message.from_user.username, passed, total, average, earned_score)
         await state.clear()
         await message.answer('Тест завершен')

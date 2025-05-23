@@ -41,10 +41,9 @@ def get_questions(test_id, user_id):
         question_ids = json.loads(questions_json)
         if question_ids:
             questions = []
-            topics = []
             placeholders = ",".join(["%s"] * len(question_ids))
             rows = execute(
-                f"SELECT id, title, question_text, question_type, difficulty, options "
+                f"SELECT id, title, question_text, question_type, difficulty, options, correct_answer "
                 f"FROM current_questions WHERE id IN ({placeholders})",
                 tuple(question_ids)
             )
@@ -59,7 +58,29 @@ def get_questions(test_id, user_id):
                         "question_type": r[3],
                         "difficulty": r[4],
                         "options": json.loads(r[5]) if r[5] else [],
-                        "answer": ""
+                        "answer": r[5],
+                        "user_answer": ""
                     })
             return questions
 
+def ending(test_id, user_id, passed, total, average, earned_score):
+    questions = get_questions(test_id, user_id)
+    difficulty_map = {"easy": 1, "medium": 2, "hard": 5}
+    total_minutes = sum(
+        difficulty_map.get(q["difficulty"], 1)
+        for q in questions
+    )
+    moscow_tz = datetime.timezone(datetime.timedelta(hours=3))
+    end_time = datetime.datetime.now(
+        moscow_tz) + datetime.timedelta(minutes=total_minutes)
+    execute(
+        """
+        UPDATE tests
+        SET passed = %s,
+            total = %s,
+            average = %s,
+            earned_score = %s
+        WHERE id = %s
+        """,
+        (end_time, total, average, earned_score, test_id)
+    )
