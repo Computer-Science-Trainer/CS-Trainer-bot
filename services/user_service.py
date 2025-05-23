@@ -116,6 +116,11 @@ def save_user_test(user_id: int, test_type: str, section: str,
         (test_type, section, user_id, passed,
          total, average, passed, json.dumps(topics))
     )
+    row = execute(
+            "SELECT id FROM tests WHERE type = %s AND user_id = %s AND section = %s",
+            (test_type, user_id, section), fetchone=True
+        )
+    return row[0]
 
 
 def get_user_tests(user_id: int) -> list[dict]:

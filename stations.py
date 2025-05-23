@@ -15,4 +15,6 @@ class Tests(StatesGroup):
     total_topic = State()
     recommended_test = State()
     topic = State()
-
+    start_test = State()
+    execute_test = State()
+    end_test = State()
