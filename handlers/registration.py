@@ -7,8 +7,8 @@ from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
 from services.user_service import save_user, change_db_users, get_user_by_email
 from stations import Registration
-from security import create_access_token, decode_access_token, verify_password
 from services.email_service import send_verification_email
+from security import create_access_token, decode_access_token, verify_password
 
 MAX_AVATAR_SIZE = 1024 * 300  # 300 KB
 MAX_USERNAME_LEN = 32
@@ -47,9 +47,19 @@ def register_handlers(dp):
 
     @dp.message(Registration.password)
     async def get_password(message: types.Message, state: FSMContext):
-        await state.update_data(password=message.text)
         data = await state.get_data()
         user = get_user_by_email(data['email'])
+        if 'password' in data and not data['password']:
+            if change_db_users(user['email'], ('password', message.text)) != 'success':
+                error(f"DB save failed for user {user['email']}. Data: telegram")
+                await message.answer(
+                    "🔧 Техническая ошибка. Администратор уже уведомлён",
+                    reply_markup=types.ReplyKeyboardRemove()
+                )
+            await message.answer(f'Новый пароль сохранён. {user['username']}, давай начнём.')
+            await state.clear()
+            return
+        await state.update_data(password=message.text)
         if user:
             if verify_password(data['password'], user['password']) and user['verified'] == True:
                 if change_db_users(user['email'], ('telegram', message.from_user.username)) != 'success':
@@ -74,6 +84,7 @@ def register_handlers(dp):
                         "🔧 Техническая ошибка. Администратор уже уведомлён",
                         reply_markup=types.ReplyKeyboardRemove()
                     )
+                send_verification_email(data['email'], code)
                 #background_tasks.add_task(send_verification_email, user['email'], code)
                 print(f'Verification code for {user['email']}: {code}')
                 await state.set_state(Registration.verification)
@@ -128,6 +139,7 @@ def register_handlers(dp):
                 "🔧 Техническая ошибка. Администратор уже уведомлён",
                 reply_markup=types.ReplyKeyboardRemove()
             )
+        send_verification_email(data['email'], code)
         await message.answer('Ваши данные сохранены. Код для подтверждения отправлен на почту. Введите его ниже.')
         await state.set_state(Registration.verification)
 
@@ -136,5 +148,16 @@ def register_handlers(dp):
         await callback.answer()
         await state.update_data(password=None)
         await callback.message.edit_reply_markup(reply_markup=None)
+        data = await state.get_data()
+        code = generate_verification_code()
+        if change_db_users(data['email'], ('verification_code', code)) != 'success':
+            error(f"DB save failed for user {data['email']}. Data: {code}")
+            await callback.message.answer(
+                "🔧 Техническая ошибка. Администратор уже уведомлён",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+        send_verification_email(data['email'], code)
+        # background_tasks.add_task(send_verification_email, data['email'], code)
+        print(f'Verification code for {data['email']}: {code}')
         await callback.message.answer('Код для восстановления отправлен на почту. Введите его ниже.')
         await state.set_state(Registration.verification)
