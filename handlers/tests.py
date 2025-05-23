@@ -83,7 +83,7 @@ def register_tests_handlers(dp):
         questions = data['questions']
         questions[data['cur_test']]['user_answer'] = message.text
         await state.update_data(questions=questions)
-        if data['cur_test'] + 1 < 3:
+        if data['cur_test'] + 1 < 10:
             await state.update_data(cur_test=data['cur_test'] + 1)
             await message.answer(data['questions'][data['cur_test'] + 1]['question_text'])
             return
