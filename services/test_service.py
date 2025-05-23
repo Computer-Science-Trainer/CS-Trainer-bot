@@ -11,13 +11,13 @@ logger = logging.getLogger(__name__)
 
 def get_test(test_id, user_id):
     row = execute(
-            "SELECT topics, questions, created_at FROM tests WHERE id = %s AND user_id = %s",
-            (test_id, user_id), fetchone=True
+            "SELECT id, topics, questions, created_at FROM tests WHERE id = %s",
+            (test_id), fetchone=True
         )
-    row = execute(
-        "SELECT id FROM tests WHERE user_id = %s ORDER BY created_at DESC LIMIT 1",
-        (user_id,), fetchone=True
-    )
+    # row = execute(
+    #     "SELECT id FROM tests WHERE user_id = %s ORDER BY created_at DESC LIMIT 1",
+    #     (user_id,), fetchone=True
+    # )
     test_id = row[0]
     return test_id
 
@@ -64,23 +64,28 @@ def get_questions(test_id, user_id):
             return questions
 
 def ending(test_id, user_id, passed, total, average, earned_score):
-    questions = get_questions(test_id, user_id)
+    questions = execute("SELECT questions FROM tests WHERE id = %s", (test_id), fetchone=True)
+    difficulties = []
+    for i in questions:
+        difficulties.append(execute("SELECT difficulty FROM current_questions WHERE id = %s", (i), fetchone=True))
     difficulty_map = {"easy": 1, "medium": 2, "hard": 5}
     total_minutes = sum(
-        difficulty_map.get(q["difficulty"], 1)
-        for q in questions
+        difficulty_map.get(d, 1)
+        for d in difficulties
     )
     moscow_tz = datetime.timezone(datetime.timedelta(hours=3))
     end_time = datetime.datetime.now(
         moscow_tz) + datetime.timedelta(minutes=total_minutes)
+    print(test_id)
     execute(
         """
         UPDATE tests
-        SET passed = %s,
+        SET end_time = %s,
+            passed = %s,
             total = %s,
             average = %s,
             earned_score = %s
         WHERE id = %s
         """,
-        (end_time, total, average, earned_score, test_id)
+        (end_time, passed, total, average, earned_score, test_id)
     )

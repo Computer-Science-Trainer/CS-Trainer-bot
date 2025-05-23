@@ -12,7 +12,7 @@ def register_tests_handlers(dp):
     async def getting_leaderboard(message: types.Message, state: FSMContext):
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
-                [KeyboardButton(text="Рекомендованный"), KeyboardButton(text="Создам сам")]
+                [KeyboardButton(text="Рекомендованный")]
             ],
             resize_keyboard=True,
             one_time_keyboard=True
@@ -83,7 +83,7 @@ def register_tests_handlers(dp):
         questions = data['questions']
         questions[data['cur_test']]['user_answer'] = message.text
         await state.update_data(questions=questions)
-        if data['cur_test'] + 1 < 10:
+        if data['cur_test'] + 1 < 3:
             await state.update_data(cur_test=data['cur_test'] + 1)
             await message.answer(data['questions'][data['cur_test'] + 1]['question_text'])
             return
