@@ -86,10 +86,11 @@ def register_tests(dp):
         await callback.answer()
         data = await state.get_data()
         token = data.get('jwt_token')
-
         username = callback.from_user.username
         try:
-            user = await api_get(f"user/{username}", jwt_token=token)
+            login = await api_post('auth/login-telegram', {'telegram_username': username})
+            name = login.get('username', username)
+            user = await api_get(f"user/{name}", jwt_token=token)
             create_resp = await api_post('tests', {'section': 'FI', 'topics': [callback.data]}, token)
             test_id = create_resp.get('id') or create_resp.get('test_id')
             if not test_id:
@@ -124,8 +125,13 @@ def register_tests(dp):
         answers = [{'question_id': q['id'], 'answer': q['user_answer']}
                    for q in questions]
         try:
-            await api_post(f"tests/{data['test_id']}/submit", {'answers': answers}, token)
-            await message.answer(messages["tests"]["completed"])
+            result = await api_post(f"tests/{data['test_id']}/submit", {'answers': answers}, token)
+            message_data = {
+                'passed': result['passed'],
+                'accuracy': round(result['passed'] / result['total'] * 100),
+                'earned_score': result['earned_score']
+            }
+            await message.answer(messages["tests"]["completed"].format(**message_data))
         except HTTPStatusError:
             await message.answer(messages["tests"]["errors"]["loadErrorDescription"])
         await state.clear()
