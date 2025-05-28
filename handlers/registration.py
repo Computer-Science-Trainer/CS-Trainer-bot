@@ -1,163 +1,155 @@
-from aiogram import types
-from aiogram import F
-import random
-from logging import error
-# from aiogram.filters import Text
+from aiogram import types, F
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
-from services.user_service import save_user, change_db_users, get_user_by_email
-from stations import Registration
-from services.email_service import send_verification_email
-from security import create_access_token, decode_access_token, verify_password
-
-MAX_AVATAR_SIZE = 1024 * 300  # 300 KB
-MAX_USERNAME_LEN = 32
-MAX_EMAIL_LEN = 320
-MAX_TELEGRAM_LEN = 255
-MAX_GITHUB_LEN = 255
-MAX_WEBSITE_LEN = 255
-MAX_BIO_LEN = 500
+from httpx import HTTPStatusError
+from .api_client import api_post
+import logging
+from aiogram.fsm.state import State, StatesGroup
+from messages.locale import messages
 
 
-def generate_verification_code() -> str:
-    return f"{random.randint(0, 999999):06d}"
+class Registration(StatesGroup):
+    email = State()
+    name = State()
+    password = State()
+    password_repeat = State()
+    verification = State()
 
 
-def register_handlers(dp):
+class Auth(StatesGroup):
+    email = State()
+    password = State()
+
+
+def register_registration(dp):
     @dp.message(Command("start"))
     async def cmd_start(message: types.Message, state: FSMContext):
-        text = ('Привет! Тебе нужна помощь в подготовке к Зайцеву?\nТы по адресу! '
-                'Но для начала, давай проверим твою регистрацию.\n'
-                '(Даже если ее нет, просто следуй инструкции.) \n Введи свою почту:')
-        remove_keyboard = types.ReplyKeyboardRemove()
-        await message.answer(text, reply_markup=remove_keyboard)
-        await state.set_state(Registration.email)
+        username = message.from_user.username
+        if not username:
+            await message.answer(messages["registration"]["needUsername"])
+            return
+        try:
+            resp = await api_post('auth/check-telegram', {'telegram_username': username})
+            if resp.get('exists'):
+                login = await api_post('auth/login-telegram', {'telegram_username': username})
+                token = login.get('access_token') or login.get('token')
+                if token:
+                    await state.update_data(jwt_token=token)
+                name = login.get('username', username)
+                await message.answer(messages["registration"]["loginWelcome"].format(name=name))
+            else:
+                await state.update_data(telegram_username=username)
+                await message.answer(messages["registration"]["enterEmail"])
+                await state.set_state(Registration.email)
+        except HTTPStatusError:
+            await message.answer(messages["registration"]["connectionError"])
 
     @dp.message(Registration.email)
-    async def get_email(message: types.Message, state: FSMContext):
-        await state.update_data(email=message.text)
-        forgot_kb = types.InlineKeyboardMarkup(inline_keyboard=[
-            [types.InlineKeyboardButton(text="Забыли пароль?", callback_data="forget_password")]
-        ])
-        await message.answer(
-            'Теперь необходимо ввести пароль.',
-            reply_markup=forgot_kb
-        )
+    async def link_email(message: types.Message, state: FSMContext):
+        email = message.text
+        data = await state.get_data()
+        username = data.get('telegram_username')
+        try:
+            await api_post('auth/link-telegram', {'telegram_username': username, 'email': email})
+            await message.answer(messages["registration"]["emailBound"])
+            await state.clear()
+        except HTTPStatusError as err:
+            if err.response.status_code == 404:
+                await state.update_data(email=email)
+                await message.answer(messages["registration"]["emailNotFound"])
+                await state.set_state(Registration.name)
+            else:
+                await message.answer(messages["registration"]["connectionError"])
+
+    @dp.message(Registration.name)
+    async def get_name(message: types.Message, state: FSMContext):
+        await state.update_data(username=message.text)
+        await message.answer(messages["registration"]["enterPassword"])
         await state.set_state(Registration.password)
 
     @dp.message(Registration.password)
     async def get_password(message: types.Message, state: FSMContext):
-        data = await state.get_data()
-        user = get_user_by_email(data['email'])
-        if 'password' in data and not data['password']:
-            if change_db_users(user['email'], ('password', message.text)) != 'success':
-                error(f"DB save failed for user {user['email']}. Data: telegram")
-                await message.answer(
-                    "🔧 Техническая ошибка. Администратор уже уведомлён",
-                    reply_markup=types.ReplyKeyboardRemove()
-                )
-            await message.answer(f'Новый пароль сохранён. {user['username']}, давай начнём.')
-            await state.clear()
-            return
         await state.update_data(password=message.text)
-        if user:
-            if verify_password(data['password'], user['password']) and user['verified'] == True:
-                if change_db_users(user['email'], ('telegram', message.from_user.username)) != 'success':
-                    error(f"DB save failed for user {user['email']}. Data: telegram")
-                    await message.answer(
-                        "🔧 Техническая ошибка. Администратор уже уведомлён",
-                        reply_markup=types.ReplyKeyboardRemove()
-                    )
-                await message.answer(f'Ваша регистрация подтверждена. {user['username']}, давай начнём.')
-                await state.clear()
-            elif not verify_password(data['password'], user['password']):
-                await message.answer('Пароль неверен, введите его заново.')
-                await state.set_state(Registration.password)
-            else:
-                text = ('Вы еще не подтвердили регистрацию.\nСейчас вам на почту придет код подтверждения.\n'
-                        'Отправьте его мне.')
-                await message.answer(text)
-                code = generate_verification_code()
-                if change_db_users(user['email'], ('verification_code', code)) != 'success':
-                    error(f"DB save failed for user {user['email']}. Data: {code}")
-                    await message.answer(
-                        "🔧 Техническая ошибка. Администратор уже уведомлён",
-                        reply_markup=types.ReplyKeyboardRemove()
-                    )
-                send_verification_email(data['email'], code)
-                #background_tasks.add_task(send_verification_email, user['email'], code)
-                print(f'Verification code for {user['email']}: {code}')
-                await state.set_state(Registration.verification)
-        else:
-            await message.answer('Назовите свое имя.')
-            await state.set_state(Registration.name)
+        await message.answer(messages["registration"]["repeatPassword"])
+        await state.set_state(Registration.password_repeat)
+
+    @dp.message(Registration.password_repeat)
+    async def get_password_repeat(message: types.Message, state: FSMContext):
+        data = await state.get_data()
+        pwd = data.get('password')
+        if message.text != pwd:
+            await message.answer(messages["registration"]["passwordMismatch"])
+            await state.set_state(Registration.password)
+            return
+        username = data.get('telegram_username')
+        email = data.get('email')
+        name = data.get('username')
+        try:
+            await api_post('auth/register', {
+                'telegram_username': username,
+                'email': email,
+                'password': pwd,
+                'password_repeat': message.text,
+                'username': name
+            })
+            await message.answer(messages["registration"]["verificationSent"])
+            await state.set_state(Registration.verification)
+        except HTTPStatusError:
+            await message.answer(messages["registration"]["connectionError"])
 
     @dp.message(Registration.verification)
-    async def get_verification_code(message: types.Message, state: FSMContext):
-        await state.update_data(verification_code=message.text)
+    async def verify_code(message: types.Message, state: FSMContext):
         data = await state.get_data()
-        user = get_user_by_email(data['email'])
-        if data['verification_code'] == user['verification_code']:
-            if change_db_users(data['email'], ('verified', 1)) != 'success':
-                error(f"DB save failed for user {user['email']}. Data: verification")
-                await message.answer(
-                    "🔧 Техническая ошибка. Администратор уже уведомлён",
-                    reply_markup=types.ReplyKeyboardRemove()
-                )
-            if not data['password']:
-                await message.answer("Введите новый пароль.")
-                await state.set_state(Registration.password)
-            if change_db_users(data['email'], ('verified', 1)) != 'success':
-                error(f"DB save failed for user {user['email']}. Data: verification")
-                await message.answer(
-                    "🔧 Техническая ошибка. Администратор уже уведомлён",
-                    reply_markup=types.ReplyKeyboardRemove()
-                )
-            await message.answer("Вы вошли, можете начинать готовиться!")
+        email = data.get('email')
+        try:
+            await api_post('auth/verify', {'email': email, 'code': message.text})
+            await message.answer(messages["registration"]["registrationCompleted"])
             await state.clear()
-        else:
-            await message.answer("Код неверен. В случае неполадок обратитесь в поддержку. См. меню.")
+        except HTTPStatusError:
+            await message.answer('Неверный код. Попробуйте снова.')
             await state.set_state(Registration.verification)
 
-
-    @dp.message(Registration.name)
-    async def get_name(message: types.Message, state: FSMContext):
-        await state.update_data(name=message.text)
-        data = await state.get_data()
-        code = generate_verification_code()
-        if change_db_users(data['email'], ('verification_code', code)) != 'success':
-            error(f"DB save failed for user {data['email']}. Data: {code}")
-            await message.answer(
-                "🔧 Техническая ошибка. Администратор уже уведомлён",
-                reply_markup=types.ReplyKeyboardRemove()
-            )
-        #background_tasks.add_task(send_verification_email, data['email'], code)
-        print(f'Verification code for {data['email']}: {code}')
-        if save_user(data['email'], data['password'], data['name'], False, code):
-            error(f"DB save failed for user {data['email']}.")
-            await message.answer(
-                "🔧 Техническая ошибка. Администратор уже уведомлён",
-                reply_markup=types.ReplyKeyboardRemove()
-            )
-        send_verification_email(data['email'], code)
-        await message.answer('Ваши данные сохранены. Код для подтверждения отправлен на почту. Введите его ниже.')
-        await state.set_state(Registration.verification)
-
     @dp.callback_query(F.data == "forget_password")
-    async def handle_forget_password(callback: types.CallbackQuery, state: FSMContext):
+    async def handle_forget_password(
+            callback: types.CallbackQuery, state: FSMContext):
         await callback.answer()
         await state.update_data(password=None)
         await callback.message.edit_reply_markup(reply_markup=None)
         data = await state.get_data()
-        code = generate_verification_code()
-        if change_db_users(data['email'], ('verification_code', code)) != 'success':
-            error(f"DB save failed for user {data['email']}. Data: {code}")
-            await callback.message.answer(
-                "🔧 Техническая ошибка. Администратор уже уведомлён",
-                reply_markup=types.ReplyKeyboardRemove()
-            )
-        send_verification_email(data['email'], code)
-        # background_tasks.add_task(send_verification_email, data['email'], code)
-        print(f'Verification code for {data['email']}: {code}')
-        await callback.message.answer('Код для восстановления отправлен на почту. Введите его ниже.')
-        await state.set_state(Registration.verification)
+        email = data.get('email')
+        try:
+            await api_post('auth/recover', {'email': email})
+            await callback.message.answer(messages["registration"]["forgotPasswordSent"])
+            await state.set_state(Registration.verification)
+        except HTTPStatusError as exc:
+            logging.error("Password recovery failed for %s: %s", email, exc)
+            await callback.message.answer(messages["registration"]["forgotPasswordError"])
+
+    @dp.message(Command("login"))
+    async def cmd_login(message: types.Message, state: FSMContext):
+        await message.answer(messages["registration"]["enterEmailLogin"])
+        await state.set_state(Auth.email)
+
+    @dp.message(Auth.email)
+    async def process_login_email(message: types.Message, state: FSMContext):
+        await state.update_data(email=message.text)
+        await message.answer(messages["registration"]["enterPasswordLogin"])
+        await state.set_state(Auth.password)
+
+    @dp.message(Auth.password)
+    async def process_login_password(
+            message: types.Message, state: FSMContext):
+        data = await state.get_data()
+        email = data.get('email')
+        password = message.text
+        try:
+            resp = await api_post('auth/login', {'email': email, 'password': password})
+            token = resp.get('access_token') or resp.get('token')
+            if token:
+                await state.update_data(jwt_token=token)
+                await message.answer(messages["registration"]["loginSuccess"])
+            else:
+                await message.answer(messages["registration"]["tokenError"])
+            await state.clear()
+        except HTTPStatusError:
+            await message.answer(messages["registration"]["loginError"])

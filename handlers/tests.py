@@ -1,24 +1,36 @@
 from aiogram import types, F
-from stations import Tests
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters.command import Command
-from services.test_service import get_test, update_questions, get_questions, ending
-from services.user_service import get_user_by_telegram, save_user_test
+from httpx import HTTPStatusError
+from .api_client import api_get, api_post
+from aiogram.fsm.state import State, StatesGroup
+from messages.locale import messages
 
-def register_tests_handlers(dp):
+
+class Tests(StatesGroup):
+    type_of_test = State()
+    total_topic = State()
+    recommended_test = State()
+    topic = State()
+    start_test = State()
+    execute_test = State()
+    end_test = State()
+
+
+def register_tests(dp):
     @dp.message(Command("tests"))
     async def getting_leaderboard(message: types.Message, state: FSMContext):
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
-                [KeyboardButton(text="Рекомендованный")]
+                [KeyboardButton(text=messages["main"]["commands"]["tests"])]
             ],
             resize_keyboard=True,
             one_time_keyboard=True
         )
         await message.answer(
-            "Выбери тип теста?",
+            messages["main"]["commands"]["tests"],
             reply_markup=keyboard
         )
         await state.set_state(Tests.type_of_test)
@@ -26,31 +38,41 @@ def register_tests_handlers(dp):
     @dp.message(Tests.type_of_test)
     async def get_type_of_test(message: types.Message, state: FSMContext):
         await state.update_data(type_of_tests=message.text)
-        if message.text not in ["Рекомендованный", "Создам сам"]:
-            await message.answer("Пожалуйста, выберите тип из предложенных")
+        valid_types = [messages["main"]["commands"]["tests"], "Создам сам"]
+        if message.text not in valid_types:
+            await message.answer(messages["leaderboard"]["invalidTopic"])
             return
-        if message.text == 'Рекомендованный':
+        if message.text == messages["main"]["commands"]["tests"]:
             builder = InlineKeyboardBuilder()
             builder.row(
-                InlineKeyboardButton(text="📚 Информация и Сообщения", callback_data="info_messages"),
-                InlineKeyboardButton(text="🔢 Элементы теории алгоритмов", callback_data="algo_theory")
+                InlineKeyboardButton(
+                    text="📚 Информация и Сообщения",
+                    callback_data="info_messages"),
+                InlineKeyboardButton(
+                    text="🔢 Элементы теории алгоритмов",
+                    callback_data="algo_theory")
             )
             builder.row(
-                InlineKeyboardButton(text="💬 Интерпретация дискретных сообщений", callback_data="discrete_messages"),
-                InlineKeyboardButton(text="📊 Теорема Шеннона", callback_data="shannon_theorem")
+                InlineKeyboardButton(
+                    text="💬 Интерпретация дискретных сообщений",
+                    callback_data="discrete_messages"),
+                InlineKeyboardButton(
+                    text="📊 Теорема Шеннона",
+                    callback_data="shannon_theorem")
             )
             await message.answer(
-                "Выберите тему теста:",
+                messages["tests"]["chooseTopic"],
                 reply_markup=builder.as_markup()
             )
             await state.set_state(Tests.recommended_test)
         else:
-            await message.answer('Выбери темы для вопросов')
+            await message.answer(messages["leaderboard"]["chooseTopic"])
             await state.set_state(Tests.topic)
 
     @dp.callback_query(Tests.recommended_test,
                        F.data.in_({"info_messages", "algo_theory", "discrete_messages", "shannon_theorem"}))
-    async def choose_recommended_topic(callback: CallbackQuery, state: FSMContext):
+    async def choose_recommended_topic(
+            callback: CallbackQuery, state: FSMContext):
         topic_map = {
             "info_messages": [180, 9],
             "algo_theory": [166, 59],
@@ -62,36 +84,48 @@ def register_tests_handlers(dp):
         await state.update_data(topic_id=topic_id, test_id=test_id)
 
         await callback.answer()
-
-        user = get_user_by_telegram(callback.from_user.username)
         data = await state.get_data()
-        test_id = save_user_test(user['id'], "practice", 'fundamentals', 0, 0, data['topic_id'])
+        token = data.get('jwt_token')
 
-        update_questions(test_id, data['test_id'])
-        questions = get_questions(test_id, user['id'])
+        username = callback.from_user.username
+        try:
+            user = await api_get(f"user/{username}", jwt_token=token)
+            create_resp = await api_post('tests', {'section': 'FI', 'topics': [callback.data]}, token)
+            test_id = create_resp.get('id') or create_resp.get('test_id')
+            if not test_id:
+                await callback.message.answer(messages["tests"]["errors"]["ErrorTitle"])
+                await state.clear()
+                return
+            test_data = await api_get(f"tests/{test_id}", jwt_token=token)
+            questions = test_data.get('questions', [])
+        except HTTPStatusError:
+            await callback.message.answer(messages["tests"]["errors"]["loadErrorDescription"])
+            await state.clear()
+            return
 
         await state.update_data(test_id=test_id, cur_test=0, questions=questions)
         await state.set_state(Tests.execute_test)
 
-        await callback.message.answer("Тест начался.")
+        await callback.message.answer(messages["tests"]["started"])
         await callback.message.answer(questions[0]['question_text'])
 
     @dp.message(Tests.execute_test)
     async def execute_test(message: types.Message, state: FSMContext):
         data = await state.get_data()
-        await state.update_data(cur_test=data['cur_test'] + 1)
+        token = data.get('jwt_token')
         questions = data['questions']
         questions[data['cur_test']]['user_answer'] = message.text
         await state.update_data(questions=questions)
-        if data['cur_test'] + 1 < 10:
-            await state.update_data(cur_test=data['cur_test'] + 1)
-            await message.answer(data['questions'][data['cur_test'] + 1]['question_text'])
+        cur = data['cur_test']
+        if cur + 1 < len(questions):
+            await state.update_data(cur_test=cur + 1)
+            await message.answer(questions[cur + 1]['question_text'])
             return
-        passed = total = average = earned_score = 0
-        for i in data['questions']:
-            if i['answer'] == i['user_answer']:
-                passed += 1
-                earned_score += 10 * i['difficulty']
-        ending(data['test_id'], message.from_user.username, passed, total, average, earned_score)
+        answers = [{'question_id': q['id'], 'answer': q['user_answer']}
+                   for q in questions]
+        try:
+            await api_post(f"tests/{data['test_id']}/submit", {'answers': answers}, token)
+            await message.answer(messages["tests"]["completed"])
+        except HTTPStatusError:
+            await message.answer(messages["tests"]["errors"]["loadErrorDescription"])
         await state.clear()
-        await message.answer('Тест завершен')
