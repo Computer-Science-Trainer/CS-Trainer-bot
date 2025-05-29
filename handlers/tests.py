@@ -108,6 +108,7 @@ def register_tests(dp):
             except HTTPStatusError:
                 await callback.message.answer(messages["registration"]["connectionError"])
                 return
+
         username = callback.from_user.username
         try:
             login = await api_post('auth/login-telegram', {'telegram_username': username})
