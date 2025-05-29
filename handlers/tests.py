@@ -86,6 +86,26 @@ def register_tests(dp):
         await callback.answer()
         data = await state.get_data()
         token = data.get('jwt_token')
+        if not token:
+            username = callback.from_user.username
+            try:
+                resp = await api_post('auth/check-telegram', {'telegram_username': username})
+                if resp.get('exists'):
+                    login = await api_post('auth/login-telegram', {'telegram_username': username})
+                    token = login.get('access_token') or login.get('token')
+                    if token:
+                        await state.update_data(jwt_token=token)
+                    else:
+                        await callback.message.answer(messages["registration"]["tokenError"])
+                        await state.clear()
+                        return
+                else:
+                    await callback.message.answer(messages["registration"]["needUsername"])
+                    await state.clear()
+                    return
+            except HTTPStatusError:
+                await callback.message.answer(messages["registration"]["connectionError"])
+                return
 
         username = callback.from_user.username
         try:
