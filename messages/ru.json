@@ -70,6 +70,8 @@
       "showFundamentals": "Показать ФИ"
     },
     "tests": {
+      "moveNext": "Следующий",
+      "moveBack": "Предыдущий",
       "started": "Тестирование начато. Удачи!",
       "chooseTopic": "Выберите тему:",
       "completed": "Завершенный тест верен на {accuracy}%. Правильных ответов: {passed}. Заработанные баллы: {earned_score}",

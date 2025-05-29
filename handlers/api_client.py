@@ -8,7 +8,7 @@ from httpx import HTTPStatusError
 
 BASE_URL = os.getenv("BACKEND_URL", "https://cs-trainer.ru/api/")
 
-client = httpx.AsyncClient(base_url=BASE_URL, timeout=10)
+client = httpx.AsyncClient(base_url=BASE_URL, timeout=10, follow_redirects=True)
 
 
 async def api_post(endpoint: str, data: dict, jwt_token: str = None) -> dict:
