@@ -7,7 +7,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 from handlers.registration import register_registration
 from handlers.leaderboard import register_leaderboard
-from handlers.tests import register_tests
+from handlers.tests import register_tests, global_router
 from handlers.user_info import register_userinfo
 from messages.locale import messages
 
@@ -24,13 +24,11 @@ register_registration(dp)
 register_leaderboard(dp)
 register_tests(dp)
 register_userinfo(dp)
+dp.include_router(global_router)
 
 async def main():
     await bot.set_my_commands([
         BotCommand(command="start", description=messages["main"]["commands"]["start"]),
-        BotCommand(command="leaderboard", description=messages["main"]["commands"]["leaderboard"]),
-        BotCommand(command='me', description=messages["main"]["commands"]["me"]),
-        BotCommand(command="tests", description=messages["main"]["commands"]["tests"]),
     ])
     await dp.start_polling(bot)
 

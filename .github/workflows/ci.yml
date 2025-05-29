@@ -1,0 +1,52 @@
+name: Production CI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+#   lint:
+#     name: Lint Code for PEP Compliance
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v3
+
+#       - name: Set up Python
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: '3.x'
+
+#       - name: Install lint dependencies
+#         run: |
+#           python -m pip install --upgrade pip
+#           pip install flake8
+
+#       - name: Run flake8 to validate code style (PEP8)
+#         run: |
+#           flake8 . --max-line-length=120
+
+  deploy:
+    name: Deploy
+    # needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Run run.sh
+        uses: appleboy/ssh-action@v1
+        env:
+            DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.PI_HOST }}
+          username: ${{ secrets.PI_USER }}
+          key: ${{ secrets.PI_PRIVATE_KEY }}
+          port: ${{ secrets.PI_PORT }}
+          envs: DEPLOY_PATH
+          script: |
+            echo "Navigating to the repository directory"
+            cd "${DEPLOY_PATH}"
+            echo "Running the script"
+            ./run.sh

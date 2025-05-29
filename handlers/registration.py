@@ -6,6 +6,8 @@ from .api_client import api_post
 import logging
 from aiogram.fsm.state import State, StatesGroup
 from messages.locale import messages
+from handlers.tests import get_main_reply_keyboard, get_tests_menu_keyboard
+from handlers.user_info import show_profile
 
 
 MAX_USERNAME_LEN = 32
@@ -40,7 +42,7 @@ def register_registration(dp):
                 if token:
                     await state.update_data(jwt_token=token)
                 name = login.get('username', username)
-                await message.answer(messages["registration"]["loginWelcome"].format(name=name))
+                await message.answer(messages["registration"]["loginWelcome"].format(name=name), reply_markup=get_main_reply_keyboard())
             else:
                 await state.update_data(telegram_username=username)
                 await message.answer(messages["registration"]["enterEmail"])
@@ -115,7 +117,7 @@ def register_registration(dp):
         email = data.get('email')
         try:
             await api_post('auth/verify', {'email': email, 'code': message.text})
-            await message.answer(messages["registration"]["registrationCompleted"])
+            await message.answer(messages["registration"]["registrationCompleted"], reply_markup=get_main_reply_keyboard())
             await state.clear()
         except HTTPStatusError:
             await message.answer('Неверный код. Попробуйте снова.')
@@ -159,9 +161,23 @@ def register_registration(dp):
             token = resp.get('access_token') or resp.get('token')
             if token:
                 await state.update_data(jwt_token=token)
-                await message.answer(messages["registration"]["loginSuccess"])
+                await message.answer(messages["registration"]["loginSuccess"], reply_markup=get_main_reply_keyboard())
             else:
                 await message.answer(messages["registration"]["tokenError"])
             await state.clear()
         except HTTPStatusError:
             await message.answer(messages["registration"]["loginError"])
+
+    @dp.message(lambda m: m.text and m.text.strip() == "📝 Тесты")
+    async def main_keyboard_tests(message: types.Message, state: FSMContext):
+        await message.answer("Выберите тип теста:", reply_markup=get_tests_menu_keyboard())
+
+    @dp.message(lambda m: m.text and m.text.strip() == "🔙 Назад")
+    async def leaderboard_back(message: types.Message, state: FSMContext):
+        from handlers.tests import get_main_reply_keyboard
+        await state.clear()
+        await message.answer("Вы вернулись в главное меню.", reply_markup=get_main_reply_keyboard())
+
+    @dp.message(lambda m: m.text and m.text.strip() == "👤 Обо мне")
+    async def main_keyboard_me(message: types.Message, state: FSMContext):
+        await show_profile(message)
