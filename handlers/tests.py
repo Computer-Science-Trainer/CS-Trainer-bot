@@ -1,6 +1,6 @@
 from aiogram import types, F
 from aiogram.fsm.context import FSMContext
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, CallbackQuery
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, CallbackQuery, ReplyKeyboardRemove
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters.command import Command
 from httpx import HTTPStatusError
@@ -88,6 +88,26 @@ def register_tests(dp):
         await callback.answer()
         data = await state.get_data()
         token = data.get('jwt_token')
+        if not token:
+            username = callback.from_user.username
+            try:
+                resp = await api_post('auth/check-telegram', {'telegram_username': username})
+                if resp.get('exists'):
+                    login = await api_post('auth/login-telegram', {'telegram_username': username})
+                    token = login.get('access_token') or login.get('token')
+                    if token:
+                        await state.update_data(jwt_token=token)
+                    else:
+                        await callback.message.answer(messages["registration"]["tokenError"])
+                        await state.clear()
+                        return
+                else:
+                    await callback.message.answer(messages["registration"]["needUsername"])
+                    await state.clear()
+                    return
+            except HTTPStatusError:
+                await callback.message.answer(messages["registration"]["connectionError"])
+                return
         username = callback.from_user.username
         try:
             login = await api_post('auth/login-telegram', {'telegram_username': username})
@@ -100,7 +120,7 @@ def register_tests(dp):
                 await state.clear()
                 return
             test_data = await api_get(f"tests/{test_id}", jwt_token=token)
-            questions = test_data.get('questions', [])
+            questions = test_data.get('questions')
         except HTTPStatusError:
             await callback.message.answer(messages["tests"]["errors"]["loadErrorDescription"])
             await state.clear()
@@ -109,31 +129,94 @@ def register_tests(dp):
         await state.update_data(test_id=test_id, cur_test=0, questions=questions)
         await state.set_state(Tests.execute_test)
 
-        await callback.message.answer(messages["tests"]["started"])
+        move_buttons = ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text=messages["tests"]['moveBack'])],
+                [KeyboardButton(text=messages["tests"]['moveNext'])]
+            ],
+            resize_keyboard=True
+        )
+        await callback.message.answer(messages["tests"]["started"], reply_markup=move_buttons)
+        if len(questions[0]['options']) > 0:
+            builder = InlineKeyboardBuilder()
+            for num, answer in enumerate(questions[0]['options']):
+                builder.button(text=answer, callback_data=f"answer_{num}")
+            builder.adjust(1)
+            await callback.message.answer(questions[0]['question_text'], reply_markup=builder.as_markup())
+            return
         await callback.message.answer(questions[0]['question_text'])
 
-    @dp.message(Tests.execute_test)
-    async def execute_test(message: types.Message, state: FSMContext):
+
+    @dp.callback_query(Tests.execute_test, F.data.startswith("answer_"))
+    async def handle_answer_selection(callback: types.CallbackQuery, state: FSMContext):
+        number_of_answer = int(callback.data.split("answer_")[1])
         data = await state.get_data()
-        token = data.get('jwt_token')
         questions = data['questions']
-        questions[data['cur_test']]['user_answer'] = message.text
+        current_question_index = data['cur_test']
+        if number_of_answer < len(questions[current_question_index]['options']):
+            selected_answer = questions[current_question_index]['options'][number_of_answer]
+        else:
+            selected_answer = ''
+        questions[current_question_index]['user_answer'] = selected_answer
         await state.update_data(questions=questions)
-        cur = data['cur_test']
-        if cur + 1 < len(questions):
-            await state.update_data(cur_test=cur + 1)
-            await message.answer(questions[cur + 1]['question_text'])
-            return
+        await process_next_question(callback.message, state)
+
+
+    async def process_next_question(message: types.Message, state: FSMContext):
+        data = await state.get_data()
+        questions = data['questions']
+        current_question_index = data['cur_test'] + 1
+        if current_question_index < len(questions):
+            next_question = questions[current_question_index]
+            await state.update_data(cur_test=current_question_index)
+            if next_question.get('options') and len(next_question['options']) > 0:
+                builder = InlineKeyboardBuilder()
+                for num, answer in enumerate(next_question['options']):
+                    builder.button(text=answer, callback_data=f"answer_{num}")
+                builder.adjust(1)
+                await message.answer(next_question['question_text'],
+                                     reply_markup=builder.as_markup())
+            else:
+                await message.answer(next_question['question_text'])
+        else:
+            await submit_test_results(message, state)
+
+
+    async def submit_test_results(message: types.Message, state: FSMContext):
+        data = await state.get_data()
+        questions = data['questions']
+        token = data.get('jwt_token')
+
         answers = [{'question_id': q['id'], 'answer': q['user_answer']}
                    for q in questions]
+
         try:
-            result = await api_post(f"tests/{data['test_id']}/submit", {'answers': answers}, token)
+            print(answers)
+            result = await api_post(f"tests/{data['test_id']}/submit",
+                                    {'answers': answers},
+                                    token)
+
             message_data = {
                 'passed': result['passed'],
                 'accuracy': round(result['passed'] / result['total'] * 100),
                 'earned_score': result['earned_score']
             }
-            await message.answer(messages["tests"]["completed"].format(**message_data))
+
+            await message.answer(
+                messages["tests"]["completed"].format(**message_data),
+                reply_markup=ReplyKeyboardRemove()
+            )
         except HTTPStatusError:
             await message.answer(messages["tests"]["errors"]["loadErrorDescription"])
+
         await state.clear()
+
+
+    @dp.message(Tests.execute_test)
+    async def handle_text_answer(message: types.Message, state: FSMContext):
+        data = await state.get_data()
+        questions = data['questions']
+        current_question_index = data['cur_test']
+        questions[current_question_index]['user_answer'] = message.text
+        await state.update_data(questions=questions)
+        await process_next_question(message, state)
