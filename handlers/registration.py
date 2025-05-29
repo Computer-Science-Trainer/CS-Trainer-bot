@@ -8,6 +8,10 @@ from aiogram.fsm.state import State, StatesGroup
 from messages.locale import messages
 
 
+MAX_USERNAME_LEN = 32
+MAX_EMAIL_LEN = 320
+
+
 class Registration(StatesGroup):
     email = State()
     name = State()

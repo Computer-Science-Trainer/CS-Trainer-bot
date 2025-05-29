@@ -22,52 +22,54 @@ class Tests(StatesGroup):
 def register_tests(dp):
     @dp.message(Command("tests"))
     async def getting_leaderboard(message: types.Message, state: FSMContext):
-        keyboard = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text=messages["main"]["commands"]["tests"])]
-            ],
-            resize_keyboard=True,
-            one_time_keyboard=True
-        )
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text='Поехали!', callback_data='start_test'))
         await message.answer(
             messages["main"]["commands"]["tests"],
-            reply_markup=keyboard
+            reply_markup=builder.as_markup()
         )
         await state.set_state(Tests.type_of_test)
 
-    @dp.message(Tests.type_of_test)
-    async def get_type_of_test(message: types.Message, state: FSMContext):
-        await state.update_data(type_of_tests=message.text)
-        valid_types = [messages["main"]["commands"]["tests"], "Создам сам"]
-        if message.text not in valid_types:
-            await message.answer(messages["leaderboard"]["invalidTopic"])
+    @dp.callback_query(Tests.type_of_test, F.data == "start_test")
+    async def get_type_of_test(callback: types.CallbackQuery, state: FSMContext):
+        await state.update_data(type_of_tests='start_test')
+        data = await state.get_data()
+        test_type = data.get("type_of_tests")
+        valid_types = [
+            'start_test',
+            "Создам сам"
+        ]
+        if test_type not in valid_types:
+            await callback.message.answer(messages["leaderboard"]["invalidTopic"])
             return
-        if message.text == messages["main"]["commands"]["tests"]:
+
+        if test_type == 'start_test':
             builder = InlineKeyboardBuilder()
             builder.row(
-                InlineKeyboardButton(
+                types.InlineKeyboardButton(
                     text="📚 Информация и Сообщения",
                     callback_data="info_messages"),
-                InlineKeyboardButton(
+                types.InlineKeyboardButton(
                     text="🔢 Элементы теории алгоритмов",
                     callback_data="algo_theory")
             )
             builder.row(
-                InlineKeyboardButton(
+                types.InlineKeyboardButton(
                     text="💬 Интерпретация дискретных сообщений",
                     callback_data="discrete_messages"),
-                InlineKeyboardButton(
+                types.InlineKeyboardButton(
                     text="📊 Теорема Шеннона",
                     callback_data="shannon_theorem")
             )
-            await message.answer(
+            await callback.message.answer(
                 messages["tests"]["chooseTopic"],
                 reply_markup=builder.as_markup()
             )
             await state.set_state(Tests.recommended_test)
         else:
-            await message.answer(messages["leaderboard"]["chooseTopic"])
+            await callback.message.answer(messages["leaderboard"]["chooseTopic"])
             await state.set_state(Tests.topic)
+        await callback.answer()
 
     @dp.callback_query(Tests.recommended_test,
                        F.data.in_({"info_messages", "algo_theory", "discrete_messages", "shannon_theorem"}))
