@@ -62,6 +62,10 @@ def register_registration(dp):
                 await state.update_data(email=email)
                 await message.answer(messages["registration"]["emailNotFound"])
                 await state.set_state(Registration.name)
+                return
+            if err.response.status_code == 422:
+                await message.answer(messages["registration"]["unprocessableEntity"])
+                return
             else:
                 await message.answer(messages["registration"]["connectionError"])
 
@@ -98,8 +102,12 @@ def register_registration(dp):
             })
             await message.answer(messages["registration"]["verificationSent"])
             await state.set_state(Registration.verification)
-        except HTTPStatusError:
-            await message.answer(messages["registration"]["connectionError"])
+        except HTTPStatusError as err:
+            if err.response.status_code == 400:
+                await message.answer(messages["registration"]["passwordError"])
+                return
+            else:
+                await message.answer(messages["registration"]["connectionError"])
 
     @dp.message(Registration.verification)
     async def verify_code(message: types.Message, state: FSMContext):
