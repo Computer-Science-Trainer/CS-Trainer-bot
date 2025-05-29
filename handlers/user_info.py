@@ -3,7 +3,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 from aiogram.filters.command import Command
 from httpx import HTTPStatusError
-from .api_client import api_get
+from .api_client import api_get, api_post
 from messages.locale import messages
 
 
@@ -12,7 +12,9 @@ def register_userinfo(dp):
     async def get_my_information(message: types.Message):
         username = message.from_user.username
         try:
-            user = await api_get(f"user/{username}")
+            login = await api_post('auth/login-telegram', {'telegram_username': username})
+            name = login.get('username', username)
+            user = await api_get(f"user/{name}")
             text = f"{user.get('username','')}\n{user.get('bio','')}"
         except HTTPStatusError:
             await message.answer(messages["registration"]["connectionError"])
@@ -29,7 +31,9 @@ def register_userinfo(dp):
     async def show_achievements(callback: types.CallbackQuery):
         username = callback.from_user.username
         try:
-            achievements = await api_get(f"user/{username}/achievements")
+            login = await api_post('auth/login-telegram', {'telegram_username': username})
+            name = login.get('username', username)
+            achievements = await api_get(f"user/{name}/achievements")
         except HTTPStatusError:
             await callback.message.answer(messages["registration"]["connectionError"])
             await callback.answer()

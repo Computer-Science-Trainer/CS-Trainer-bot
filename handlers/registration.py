@@ -8,6 +8,10 @@ from aiogram.fsm.state import State, StatesGroup
 from messages.locale import messages
 
 
+MAX_USERNAME_LEN = 32
+MAX_EMAIL_LEN = 320
+
+
 class Registration(StatesGroup):
     email = State()
     name = State()
@@ -58,6 +62,10 @@ def register_registration(dp):
                 await state.update_data(email=email)
                 await message.answer(messages["registration"]["emailNotFound"])
                 await state.set_state(Registration.name)
+                return
+            if err.response.status_code == 422:
+                await message.answer(messages["registration"]["unprocessableEntity"])
+                return
             else:
                 await message.answer(messages["registration"]["connectionError"])
 
@@ -94,8 +102,12 @@ def register_registration(dp):
             })
             await message.answer(messages["registration"]["verificationSent"])
             await state.set_state(Registration.verification)
-        except HTTPStatusError:
-            await message.answer(messages["registration"]["connectionError"])
+        except HTTPStatusError as err:
+            if err.response.status_code == 400:
+                await message.answer(messages["registration"]["passwordError"])
+                return
+            else:
+                await message.answer(messages["registration"]["connectionError"])
 
     @dp.message(Registration.verification)
     async def verify_code(message: types.Message, state: FSMContext):
