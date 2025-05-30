@@ -8,6 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 from messages.locale import messages
 from handlers.tests import get_main_reply_keyboard, get_tests_menu_keyboard
 from handlers.user_info import show_profile
+import re  # for username validation
 
 
 MAX_USERNAME_LEN = 32
@@ -20,6 +21,7 @@ class Registration(StatesGroup):
     password = State()
     password_repeat = State()
     verification = State()
+    linkPassword = State()
 
 
 class Auth(StatesGroup):
@@ -53,10 +55,18 @@ def register_registration(dp):
     @dp.message(Registration.email)
     async def link_email(message: types.Message, state: FSMContext):
         email = message.text
+        await state.update_data(email=email)
+        await message.answer(messages["registration"]["enterPasswordForLink"])
+        await state.set_state(Registration.linkPassword)
+
+    @dp.message(Registration.linkPassword)
+    async def link_email_password(message: types.Message, state: FSMContext):
         data = await state.get_data()
+        email = data.get('email')
         username = data.get('telegram_username')
+        password = message.text
         try:
-            await api_post('auth/link-telegram', {'telegram_username': username, 'email': email})
+            await api_post('auth/link-telegram', {'telegram_username': username, 'email': email, 'password': password})
             await message.answer(messages["registration"]["emailBound"])
             await state.clear()
         except HTTPStatusError as err:
@@ -68,12 +78,20 @@ def register_registration(dp):
             if err.response.status_code == 422:
                 await message.answer(messages["registration"]["unprocessableEntity"])
                 return
+            if err.response.status_code == 401:
+                await message.answer(messages["registration"]["linkError"])
+                await state.set_state(Registration.linkPassword)
             else:
                 await message.answer(messages["registration"]["connectionError"])
 
     @dp.message(Registration.name)
     async def get_name(message: types.Message, state: FSMContext):
-        await state.update_data(username=message.text)
+        username_input = message.text.strip()
+        # Validate username: only Latin letters, digits, underscore or hyphen, length 4-32
+        if not re.match(r'^[A-Za-z0-9_-]+$', username_input) or len(username_input) < 4 or len(username_input) > 32:
+            await message.answer(messages["registration"]["invalidUsername"])
+            return
+        await state.update_data(username=username_input)
         await message.answer(messages["registration"]["enterPassword"])
         await state.set_state(Registration.password)
 
@@ -87,7 +105,7 @@ def register_registration(dp):
     async def get_password_repeat(message: types.Message, state: FSMContext):
         data = await state.get_data()
         pwd = data.get('password')
-        if (not 8 <= len(pwd) < 32) or pwd.lower() == pwd or pwd.isalpha():
+        if not 8 <= len(pwd) < 32:
             await message.answer(messages["registration"]["passwordError"])
             await state.set_state(Registration.password)
             return
