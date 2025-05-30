@@ -367,11 +367,17 @@ def register_tests(dp):
         current_question_index = data['cur_test']
         question = questions[current_question_index]
         selected = question.get('user_answer', [])
-        if selected:
-            question['user_answer'] = [question['options'][i]
-                                       for i in selected]
-        else:
-            question['user_answer'] = []
+        # normalize entries: convert any answer strings back to their index
+        normalized = []
+        for ans in selected:
+            if isinstance(ans, int):
+                normalized.append(ans)
+            elif isinstance(ans, str):
+                try:
+                    normalized.append(question['options'].index(ans))
+                except ValueError:
+                    pass
+        question['user_answer'] = normalized
         questions[current_question_index] = question
         await state.update_data(questions=questions)
         await process_next_question(callback.message, state)
@@ -384,11 +390,17 @@ def register_tests(dp):
         current_question_index = data['cur_test']
         question = questions[current_question_index]
         selected = question.get('user_answer', [])
-        if selected:
-            question['user_answer'] = [question['options'][i]
-                                       for i in selected]
-        else:
-            question['user_answer'] = []
+        # normalize entries: convert any answer strings back to their index
+        normalized = []
+        for ans in selected:
+            if isinstance(ans, int):
+                normalized.append(ans)
+            elif isinstance(ans, str):
+                try:
+                    normalized.append(question['options'].index(ans))
+                except ValueError:
+                    pass
+        question['user_answer'] = normalized
         questions[current_question_index] = question
         await state.update_data(questions=questions)
         await process_next_question(callback.message, state)
@@ -398,47 +410,8 @@ def register_tests(dp):
         questions = data['questions']
         next_idx = data['cur_test'] + 1
         if next_idx < len(questions):
-            next_question = questions[next_idx]
             await state.update_data(cur_test=next_idx)
-            if next_question.get('options') and next_question['options']:
-                qtype = next_question.get('question_type', next_question.get('type', 'single'))
-                if qtype == 'multiple':
-                    user_answer = next_question.get('user_answer', [])
-                    builder = InlineKeyboardBuilder()
-                    for num, answer in enumerate(next_question['options']):
-                        mark = '✅' if num in user_answer else '➕'
-                        builder.button(
-                            text=f"{mark} {answer}",
-                            callback_data=f"answer_{num}")
-                    builder.button(
-                        text="Ответить",
-                        callback_data="submit_multi")
-                    builder.adjust(1)
-                    await message.answer(next_question['question_text'], reply_markup=builder.as_markup())
-                elif qtype == 'ordering':
-                    user_answer = next_question.get('user_answer', [])
-                    builder = InlineKeyboardBuilder()
-                    order_text = "Ваш порядок: " + \
-                        ' → '.join([next_question['options'][i]
-                                   for i in user_answer]) if user_answer else ""
-                    text = next_question['question_text']
-                    if order_text:
-                        text += f"\n\n{order_text}"
-                    for num, answer in enumerate(next_question['options']):
-                        if num not in user_answer:
-                            builder.button(
-                                text=answer, callback_data=f"answer_{num}")
-                    if len(user_answer) == len(next_question['options']):
-                        builder.button(
-                            text="Ответить", callback_data="submit_ordering")
-                    builder.adjust(1)
-                    await message.answer(text, reply_markup=builder.as_markup())
-                else:
-                    # single-choice: inline-редактирование
-                    await _show_question(message, state, next_idx)
-            else:
-                # Open-ended
-                await _show_question(message, state, next_idx)
+            await _show_question(message, state, next_idx)
         else:
             await submit_test_results(message, state)
 
@@ -449,8 +422,15 @@ def register_tests(dp):
         answers = []
         for q in questions:
             raw = q.get('user_answer')
+            opts = q.get('options', [])
             if isinstance(raw, list):
-                answer_list = [str(item) for item in raw] if raw else [""]
+                mapped = []
+                for item in raw:
+                    if isinstance(item, int) and item < len(opts):
+                        mapped.append(opts[item])
+                    elif isinstance(item, str):
+                        mapped.append(item)
+                answer_list = mapped or [""]
             elif raw is not None:
                 answer_list = [str(raw)]
             else:
@@ -480,46 +460,6 @@ def register_tests(dp):
             await message.answer(messages["tests"]["errors"]["loadErrorDescription"], reply_markup=get_main_reply_keyboard())
         await state.clear()
 
-    @dp.message(Tests.execute_test,
-                F.text.in_([messages["tests"]['moveNext'], messages["tests"]['moveBack']]))
-    async def handle_move_buttons(message: types.Message, state: FSMContext):
-        data = await state.get_data()
-        questions = data['questions']
-        current_question_index = data['cur_test']
-        if message.text == messages["tests"]['moveNext']:
-            if current_question_index + 1 < len(questions):
-                await state.update_data(cur_test=current_question_index + 1)
-                next_question = questions[current_question_index + 1]
-                if next_question.get('options') and len(
-                        next_question['options']) > 0:
-                    builder = InlineKeyboardBuilder()
-                    for num, answer in enumerate(next_question['options']):
-                        builder.button(
-                            text=answer, callback_data=f"answer_{num}")
-                    builder.adjust(1)
-                    await message.answer(next_question['question_text'], reply_markup=builder.as_markup())
-                else:
-                    await message.answer(next_question['question_text'])
-            else:
-                await message.answer(messages["tests"]["errors"].get("noNextQuestion", "Это последний вопрос."))
-        elif message.text == messages["tests"]['moveBack']:
-            if current_question_index > 0:
-                await state.update_data(cur_test=current_question_index - 1)
-                prev_question = questions[current_question_index - 1]
-                if prev_question.get('options') and len(
-                        prev_question['options']) > 0:
-                    builder = InlineKeyboardBuilder()
-                    for num, answer in enumerate(prev_question['options']):
-                        builder.button(
-                            text=answer, callback_data=f"answer_{num}")
-                    builder.adjust(1)
-                    await message.answer(prev_question['question_text'], reply_markup=builder.as_markup())
-                else:
-                    await message.answer(prev_question['question_text'])
-            else:
-                await message.answer(messages["tests"]["errors"].get("noPrevQuestion", "Это первый вопрос."))
-
-    # вместо process_next_question для текстового ответа
     @dp.message(Tests.execute_test)
     async def handle_text_answer(message: types.Message, state: FSMContext):
         data = await state.get_data()
@@ -527,8 +467,11 @@ def register_tests(dp):
         idx = data['cur_test']
         questions[idx]['user_answer'] = message.text
         await state.update_data(questions=questions)
-        # переходим к следующему вопросу через редактирование
-        await _show_question(message, state, idx + 1)
+        next_idx = idx + 1
+        if next_idx < len(questions):
+            await _show_question(message, state, next_idx)
+        else:
+            await submit_test_results(message, state)
 
     @dp.callback_query(Tests.topic, F.data.startswith("topic_"))
     async def handle_topic_choice(
