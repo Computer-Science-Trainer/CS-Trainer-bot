@@ -7,6 +7,7 @@ from .api_client import api_get, api_post
 from aiogram.fsm.state import State, StatesGroup
 from messages.locale import messages
 from aiogram import Router
+import datetime
 
 
 class Tests(StatesGroup):
@@ -52,6 +53,24 @@ async def handle_back(message: types.Message, state: FSMContext):
         parse_mode="HTML"
     )
     return
+
+
+# helper to compute remaining time until test end
+def get_remaining_time(end_time_str):
+    end = datetime.datetime.fromisoformat(end_time_str)
+    now = datetime.datetime.now()
+    delta = end - now
+    total = int(delta.total_seconds())
+    if total <= 0:
+        return "00:00"
+    m, s = divmod(total, 60)
+    h, m = divmod(m, 60)
+    if h:
+        return f"{h}ч {m}м {s}с"
+    elif m:
+        return f"{m}м {s}с"
+    else:
+        return f"{s}с"
 
 
 def register_tests(dp):
@@ -145,7 +164,6 @@ def register_tests(dp):
                 sub_number += 1
             topic_number += 1
         msg = messages["tests"]["sectionTopics"].format(section=messages['tests']['sections'][section['label']]) + "\n\n" + "\n".join(lines)
-        print(msg)
         await message.answer(
             msg + "\n\n" + messages["tests"]["writeTopicNumber"],
             parse_mode="HTML"
@@ -225,6 +243,8 @@ def register_tests(dp):
                 return
             test_data = await api_get(f"tests/{test_id}", jwt_token=token)
             questions = test_data.get('questions')
+            end_time = test_data.get('end_time')
+            await state.update_data(end_time=end_time)
         except HTTPStatusError:
             await send(messages["tests"]["errors"]["loadErrorDescription"])
             await state.clear()
@@ -233,7 +253,12 @@ def register_tests(dp):
         await state.set_state(Tests.execute_test)
         opts = questions[0].get('options') or []
         options_text = "\n".join(f"{i+1}. {opt}" for i, opt in enumerate(opts))
-        full_text = f"{questions[0]['question_text']}\n\n{options_text}"
+        qt = questions[0]['question_text'].strip()
+        ot = options_text.strip()
+        if ot:
+            full_text = f"{qt}\n\n{ot}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(end_time)}"
+        else:
+            full_text = f"{qt}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(end_time)}"
         builder = InlineKeyboardBuilder()
         for i in range(len(opts)):
             builder.button(text=str(i+1), callback_data=f"answer_{i}")
@@ -250,7 +275,12 @@ def register_tests(dp):
         question = questions[index]
         opts = question.get('options') or []
         options_text = "\n".join(f"{i+1}. {opt}" for i, opt in enumerate(opts))
-        full_text = f"{question.get('question_text', '')}\n\n{options_text}"
+        qt = question.get('question_text', '')
+        ot = options_text
+        if ot:
+            full_text = f"{qt}\n\n{ot}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
+        else:
+            full_text = f"{qt}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
         builder = InlineKeyboardBuilder()
         for i in range(len(opts)):
             builder.button(text=str(i+1), callback_data=f"answer_{i}")
@@ -308,7 +338,12 @@ def register_tests(dp):
             builder.adjust(1)
             opts = question.get('options') or []
             options_text = "\n".join(f"{i+1}. {opt}" for i, opt in enumerate(opts))
-            full_text = f"{question['question_text']}\n\n{options_text}"
+            qt = question['question_text']
+            ot = options_text
+            if ot:
+                full_text = f"{qt}\n\n{ot}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
+            else:
+                full_text = f"{qt}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
             await callback.message.edit_text(full_text, reply_markup=builder.as_markup())
         elif qtype == 'ordering':
             user_answer = question.get('user_answer', [])
@@ -330,7 +365,12 @@ def register_tests(dp):
             order = " → ".join(str(i+1) for i in user_answer)
             opts = question.get('options') or []
             options_text = "\n".join(f"{i+1}. {opt}" for i, opt in enumerate(opts))
-            full_text = f"{text}\n\n{options_text}\n\n{messages['tests']['yourOrder']} {order}"
+            qt = text
+            ot = options_text
+            if ot:
+                full_text = f"{qt}\n\n{ot}\n\n{messages['tests']['yourOrder']} {order}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
+            else:
+                full_text = f"{qt}\n\n{messages['tests']['yourOrder']} {order}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
             await callback.message.edit_text(full_text, reply_markup=builder.as_markup())
         else:
             selected_answer = question['options'][number_of_answer] if number_of_answer < len(question['options']) else ''
