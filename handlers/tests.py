@@ -256,9 +256,9 @@ def register_tests(dp):
         qt = questions[0]['question_text'].strip()
         ot = options_text.strip()
         if ot:
-            full_text = f"{qt}\n\n{ot}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(end_time)}"
+            full_text = f"<b>{messages['tests']['question']} 1</b>\n\n{qt}\n\n{ot}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(end_time)}"
         else:
-            full_text = f"{qt}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(end_time)}"
+            full_text = f"<b>{messages['tests']['question']} 1</b>\n\n{qt}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(end_time)}"
         builder = InlineKeyboardBuilder()
         for i in range(len(opts)):
             builder.button(text=str(i+1), callback_data=f"answer_{i}")
@@ -266,7 +266,7 @@ def register_tests(dp):
         if len(questions) > 1:
             builder.button(text=messages["tests"]["navNext"], callback_data="nav_next")
         builder.adjust(2)
-        msg = await send(full_text, reply_markup=builder.as_markup())
+        msg = await send(full_text, reply_markup=builder.as_markup(), parse_mode="HTML")
         await state.update_data(test_chat_id=msg.chat.id, test_message_id=msg.message_id)
 
     async def _show_question(callback_or_message, state: FSMContext, index: int):
@@ -278,9 +278,9 @@ def register_tests(dp):
         qt = question.get('question_text', '')
         ot = options_text
         if ot:
-            full_text = f"{qt}\n\n{ot}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
+            full_text = f"<b>{messages['tests']['question']} {index+1}</b>\n\n{qt}\n\n{ot}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
         else:
-            full_text = f"{qt}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
+            full_text = f"<b>{messages['tests']['question']} {index+1}</b>\n\n{qt}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
         builder = InlineKeyboardBuilder()
         for i in range(len(opts)):
             builder.button(text=str(i+1), callback_data=f"answer_{i}")
@@ -293,11 +293,12 @@ def register_tests(dp):
         chat_id = data['test_chat_id']
         message_id = data['test_message_id']
         await callback_or_message.bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=message_id,
-            text=full_text,
-            reply_markup=builder.as_markup()
-        )
+             chat_id=chat_id,
+             message_id=message_id,
+             text=full_text,
+             reply_markup=builder.as_markup(),
+             parse_mode="HTML"
+         )
         await state.update_data(cur_test=index)
 
     @dp.callback_query(Tests.recommended_test, F.data.startswith("rec_"))
@@ -341,10 +342,10 @@ def register_tests(dp):
             qt = question['question_text']
             ot = options_text
             if ot:
-                full_text = f"{qt}\n\n{ot}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
+                full_text = f"<b>{messages['tests']['question']} {current_question_index+1}</b>\n\n{qt}\n\n{ot}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
             else:
-                full_text = f"{qt}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
-            await callback.message.edit_text(full_text, reply_markup=builder.as_markup())
+                full_text = f"<b>{messages['tests']['question']} {current_question_index+1}</b>\n\n{qt}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
+            await callback.message.edit_text(full_text, reply_markup=builder.as_markup(), parse_mode="HTML")
         elif qtype == 'ordering':
             user_answer = question.get('user_answer', [])
             if number_of_answer in user_answer:
@@ -368,10 +369,10 @@ def register_tests(dp):
             qt = text
             ot = options_text
             if ot:
-                full_text = f"{qt}\n\n{ot}\n\n{messages['tests']['yourOrder']} {order}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
+                full_text = f"<b>{messages['tests']['question']} {current_question_index+1}</b>\n\n{qt}\n\n{ot}\n\n{messages['tests']['yourOrder']} {order}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
             else:
-                full_text = f"{qt}\n\n{messages['tests']['yourOrder']} {order}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
-            await callback.message.edit_text(full_text, reply_markup=builder.as_markup())
+                full_text = f"<b>{messages['tests']['question']} {current_question_index+1}</b>\n\n{qt}\n\n{messages['tests']['yourOrder']} {order}\n\n⏰ {messages['tests']['remainingTime']}: {get_remaining_time(data.get('end_time'))}"
+            await callback.message.edit_text(full_text, reply_markup=builder.as_markup(), parse_mode="HTML")
         else:
             selected_answer = question['options'][number_of_answer] if number_of_answer < len(question['options']) else ''
             question['user_answer'] = selected_answer

@@ -95,6 +95,7 @@
             "fundamentals": "ФИ",
             "algorithms": "АиСД"
       },
+      "question": "Вопрос",
       "topics": {
         "fundamental_concepts_of_informatics": "1. Основные понятия информатики",
         "information_and_message": "1.1 Информация и сообщение",
