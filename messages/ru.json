@@ -310,6 +310,8 @@
       "submitMulti": "Ответить",
       "submitOrdering": "Ответить",
       "yourOrder": "Ваш порядок:",
-      "topicChosenShort": "Вы выбрали тему: {label}"
+      "topicChosenShort": "Вы выбрали тему: {label}",
+      "finishTest": "Завершить тест",
+      "finish10Prompt": "<b>10 вопросов пройдены!</b>\n\nНажмите на клавиатуре кнопку \"Завершить тест\""
     }
 }

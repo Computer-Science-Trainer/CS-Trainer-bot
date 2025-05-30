@@ -41,6 +41,14 @@ def get_tests_menu_keyboard():
     )
 
 
+def get_finish_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=messages["tests"]["finishTest"])]],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
+
 global_router = Router()
 
 
@@ -55,7 +63,6 @@ async def handle_back(message: types.Message, state: FSMContext):
     return
 
 
-# helper to compute remaining time until test end
 def get_remaining_time(end_time_str):
     end = datetime.datetime.fromisoformat(end_time_str)
     now = datetime.datetime.now()
@@ -85,13 +92,16 @@ def register_tests(dp):
             username = login.get('username', tg_username)
             await state.update_data(site_username=username)
         recs = await api_get(f"user/{username}/recommendations")
+        lines = []
         builder = InlineKeyboardBuilder()
-        for rec in recs:
+        for idx, rec in enumerate(recs, start=1):
             label = messages["tests"]["topics"][rec]
-            builder.button(text=f"🌟 {label}", callback_data=f"rec_{rec}")
-        builder.adjust(1)
+            lines.append(f"{idx}. {label}")
+            builder.button(text=str(idx), callback_data=f"rec_{rec}")
+        builder.adjust(6)
+        text = messages["tests"]["recommended"] + "\n\n" + "\n".join(lines)
         await message.answer(
-            messages["tests"]["recommended"],
+            text,
             reply_markup=builder.as_markup(),
             parse_mode="HTML"
         )
@@ -166,7 +176,8 @@ def register_tests(dp):
         msg = messages["tests"]["sectionTopics"].format(section=messages['tests']['sections'][section['label']]) + "\n\n" + "\n".join(lines)
         await message.answer(
             msg + "\n\n" + messages["tests"]["writeTopicNumber"],
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=get_tests_menu_keyboard()
         )
         await state.update_data(current_section=section, all_topics_flat=all_topics_flat)
         await state.set_state(Tests.total_topic)
@@ -197,7 +208,11 @@ def register_tests(dp):
             return
         topic_id = label = found[1]
         await state.update_data(topic_id=topic_id)
-        await message.answer(messages["tests"]["topicChosen"].format(label=label), parse_mode="HTML")
+        await message.answer(
+            messages["tests"]["topicChosen"].format(label=label),
+            reply_markup=get_finish_keyboard(),
+            parse_mode="HTML"
+        )
         await start_test_by_topic(message, state, topic_id)
 
     async def start_test_by_topic(callback_or_message, state, topic_id):
@@ -271,8 +286,19 @@ def register_tests(dp):
 
     async def _show_question(callback_or_message, state: FSMContext, index: int):
         data = await state.get_data()
-        questions = data['questions']
-        question = questions[index]
+        if index == 10:
+            chat_id = data['test_chat_id']
+            message_id = data['test_message_id']
+            finish_text = messages["tests"]["finish10Prompt"]
+            await callback_or_message.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=finish_text,
+                parse_mode="HTML"
+            )
+            return
+
+        question = data['questions'][index]
         opts = question.get('options') or []
         options_text = "\n".join(f"{i+1}. {opt}" for i, opt in enumerate(opts))
         qt = question.get('question_text', '')
@@ -284,21 +310,18 @@ def register_tests(dp):
         builder = InlineKeyboardBuilder()
         for i in range(len(opts)):
             builder.button(text=str(i+1), callback_data=f"answer_{i}")
-        builder.adjust(1)
         if index > 0:
             builder.button(text=messages["tests"]["navPrev"], callback_data="nav_prev")
-        if index < len(questions) - 1:
+        if index < len(data['questions']):
             builder.button(text=messages["tests"]["navNext"], callback_data="nav_next")
         builder.adjust(2)
-        chat_id = data['test_chat_id']
-        message_id = data['test_message_id']
         await callback_or_message.bot.edit_message_text(
-             chat_id=chat_id,
-             message_id=message_id,
-             text=full_text,
-             reply_markup=builder.as_markup(),
-             parse_mode="HTML"
-         )
+            chat_id=data['test_chat_id'],
+            message_id=data['test_message_id'],
+            text=full_text,
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
         await state.update_data(cur_test=index)
 
     @dp.callback_query(Tests.recommended_test, F.data.startswith("rec_"))
@@ -306,7 +329,10 @@ def register_tests(dp):
             callback: types.CallbackQuery, state: FSMContext):
         topic = callback.data[4:]
         label = messages["tests"]["topics"][topic]
-        await callback.message.answer(messages["tests"]["recommendedTopicChosen"].format(label=label))
+        await callback.message.answer(
+            messages["tests"]["recommendedTopicChosen"].format(label=label),
+            reply_markup=get_finish_keyboard()
+        )
         await start_test_by_topic(callback, state, topic)
         await callback.answer()
 
@@ -381,8 +407,6 @@ def register_tests(dp):
             next_idx = current_question_index + 1
             if next_idx < len(questions):
                 await _show_question(callback, state, next_idx)
-            else:
-                await submit_test_results(callback.message, state)
         await callback.answer()
 
     @dp.callback_query(Tests.execute_test, F.data == "submit_multi")
@@ -395,15 +419,17 @@ def register_tests(dp):
             callback: types.CallbackQuery, state: FSMContext):
         await process_next_question(callback.message, state)
 
+    @dp.message(Tests.execute_test, F.text == messages["tests"]["finishTest"])
+    async def handle_finish_via_markup(message: types.Message, state: FSMContext):
+        await submit_test_results(message, state)
+
     async def process_next_question(message: types.Message, state: FSMContext):
         data = await state.get_data()
         questions = data['questions']
         next_idx = data['cur_test'] + 1
-        if next_idx < len(questions):
+        if next_idx <= len(questions):
             await state.update_data(cur_test=next_idx)
             await _show_question(message, state, next_idx)
-        else:
-            await submit_test_results(message, state)
 
     async def submit_test_results(message: types.Message, state: FSMContext):
         data = await state.get_data()
@@ -460,8 +486,6 @@ def register_tests(dp):
         next_idx = idx + 1
         if next_idx < len(questions):
             await _show_question(message, state, next_idx)
-        else:
-            await submit_test_results(message, state)
 
     @dp.callback_query(Tests.topic, F.data.startswith("topic_"))
     async def handle_topic_choice(
