@@ -69,7 +69,13 @@ def register_tests(dp):
     @dp.message(F.text == "✨ Рекомендации")
     async def show_recommended_tests(
             message: types.Message, state: FSMContext):
-        username = message.from_user.username
+        data = await state.get_data()
+        username = data.get('site_username')
+        if not username:
+            tg_username = message.from_user.username
+            login = await api_post('auth/login-telegram', {'telegram_username': tg_username})
+            username = login.get('username', tg_username)
+            await state.update_data(site_username=username)
         recs = await api_get(f"user/{username}/recommendations")
         builder = InlineKeyboardBuilder()
         for rec in recs:
