@@ -255,13 +255,11 @@ def register_tests(dp):
             return
         await state.update_data(test_id=test_id, cur_test=0, questions=questions)
         await state.set_state(Tests.execute_test)
-        # send first question in one inline message and store its identifiers
         builder = InlineKeyboardBuilder()
         opts = questions[0].get('options') or []
         for num, answer in enumerate(opts):
             builder.button(text=answer, callback_data=f"answer_{num}")
         builder.adjust(1)
-        # nav row (only Next on first)
         if len(questions) > 1:
             builder.button(text="Next ▶️", callback_data="nav_next")
         builder.adjust(2)
@@ -277,14 +275,12 @@ def register_tests(dp):
         for num, answer in enumerate(opts):
             builder.button(text=answer, callback_data=f"answer_{num}")
         builder.adjust(1)
-        # nav row (Prev/Next)
         if index > 0:
             builder.button(text="◀️ Назад", callback_data="nav_prev")
         if index < len(questions) - 1:
             builder.button(text="Далее ▶️", callback_data="nav_next")
         builder.adjust(2)
         text = question.get('question_text', '')
-        # edit the original test message
         chat_id = data['test_chat_id']
         message_id = data['test_message_id']
         await callback_or_message.bot.edit_message_text(
@@ -368,47 +364,11 @@ def register_tests(dp):
     @dp.callback_query(Tests.execute_test, F.data == "submit_multi")
     async def handle_multi_submit(
             callback: types.CallbackQuery, state: FSMContext):
-        data = await state.get_data()
-        questions = data['questions']
-        current_question_index = data['cur_test']
-        question = questions[current_question_index]
-        selected = question.get('user_answer', [])
-        # normalize entries: convert any answer strings back to their index
-        normalized = []
-        for ans in selected:
-            if isinstance(ans, int):
-                normalized.append(ans)
-            elif isinstance(ans, str):
-                try:
-                    normalized.append(question['options'].index(ans))
-                except ValueError:
-                    pass
-        question['user_answer'] = normalized
-        questions[current_question_index] = question
-        await state.update_data(questions=questions)
         await process_next_question(callback.message, state)
 
     @dp.callback_query(Tests.execute_test, F.data == "submit_ordering")
     async def handle_ordering_submit(
             callback: types.CallbackQuery, state: FSMContext):
-        data = await state.get_data()
-        questions = data['questions']
-        current_question_index = data['cur_test']
-        question = questions[current_question_index]
-        selected = question.get('user_answer', [])
-        # normalize entries: convert any answer strings back to their index
-        normalized = []
-        for ans in selected:
-            if isinstance(ans, int):
-                normalized.append(ans)
-            elif isinstance(ans, str):
-                try:
-                    normalized.append(question['options'].index(ans))
-                except ValueError:
-                    pass
-        question['user_answer'] = normalized
-        questions[current_question_index] = question
-        await state.update_data(questions=questions)
         await process_next_question(callback.message, state)
 
     async def process_next_question(message: types.Message, state: FSMContext):
