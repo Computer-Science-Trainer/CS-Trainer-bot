@@ -231,38 +231,41 @@ def register_tests(dp):
             return
         await state.update_data(test_id=test_id, cur_test=0, questions=questions)
         await state.set_state(Tests.execute_test)
-        builder = InlineKeyboardBuilder()
         opts = questions[0].get('options') or []
-        for num, answer in enumerate(opts):
-            builder.button(text=answer, callback_data=f"answer_{num}")
+        options_text = "\n".join(f"{i+1}. {opt}" for i, opt in enumerate(opts))
+        full_text = f"{questions[0]['question_text']}\n\n{options_text}"
+        builder = InlineKeyboardBuilder()
+        for i in range(len(opts)):
+            builder.button(text=str(i+1), callback_data=f"answer_{i}")
         builder.adjust(1)
         if len(questions) > 1:
             builder.button(text=messages["tests"]["navNext"], callback_data="nav_next")
         builder.adjust(2)
-        msg = await send(questions[0]['question_text'], reply_markup=builder.as_markup())
+        msg = await send(full_text, reply_markup=builder.as_markup())
         await state.update_data(test_chat_id=msg.chat.id, test_message_id=msg.message_id)
 
     async def _show_question(callback_or_message, state: FSMContext, index: int):
         data = await state.get_data()
         questions = data['questions']
         question = questions[index]
-        builder = InlineKeyboardBuilder()
         opts = question.get('options') or []
-        for num, answer in enumerate(opts):
-            builder.button(text=answer, callback_data=f"answer_{num}")
+        options_text = "\n".join(f"{i+1}. {opt}" for i, opt in enumerate(opts))
+        full_text = f"{question.get('question_text', '')}\n\n{options_text}"
+        builder = InlineKeyboardBuilder()
+        for i in range(len(opts)):
+            builder.button(text=str(i+1), callback_data=f"answer_{i}")
         builder.adjust(1)
         if index > 0:
             builder.button(text=messages["tests"]["navPrev"], callback_data="nav_prev")
         if index < len(questions) - 1:
             builder.button(text=messages["tests"]["navNext"], callback_data="nav_next")
         builder.adjust(2)
-        text = question.get('question_text', '')
         chat_id = data['test_chat_id']
         message_id = data['test_message_id']
         await callback_or_message.bot.edit_message_text(
             chat_id=chat_id,
             message_id=message_id,
-            text=text,
+            text=full_text,
             reply_markup=builder.as_markup()
         )
         await state.update_data(cur_test=index)
@@ -295,15 +298,18 @@ def register_tests(dp):
             questions[current_question_index] = question
             await state.update_data(questions=questions)
             builder = InlineKeyboardBuilder()
-            for num, answer in enumerate(question['options']):
+            for num in range(len(question['options'])):
                 mark = '✅' if num in user_answer else '➕'
                 builder.button(
-                    text=f"{mark} {answer}",
+                    text=f"{mark} {num+1}",
                     callback_data=f"answer_{num}")
             builder.button(text=messages["tests"]["submitMulti"], callback_data="submit_multi")
             builder.adjust(1)
             builder.adjust(1)
-            await callback.message.edit_text(question['question_text'], reply_markup=builder.as_markup())
+            opts = question.get('options') or []
+            options_text = "\n".join(f"{i+1}. {opt}" for i, opt in enumerate(opts))
+            full_text = f"{question['question_text']}\n\n{options_text}"
+            await callback.message.edit_text(full_text, reply_markup=builder.as_markup())
         elif qtype == 'ordering':
             user_answer = question.get('user_answer', [])
             if number_of_answer in user_answer:
@@ -314,18 +320,18 @@ def register_tests(dp):
             questions[current_question_index] = question
             await state.update_data(questions=questions)
             builder = InlineKeyboardBuilder()
-            for num, answer in enumerate(question['options']):
+            for num in range(len(question['options'])):
                 mark = '✅' if num in user_answer else '◻️'
-                builder.button(text=f"{mark} {answer}", callback_data=f"answer_{num}")
+                builder.button(text=f"{mark} {num+1}", callback_data=f"answer_{num}")
             if len(user_answer) == len(question['options']):
                 builder.button(text=messages["tests"]["submitOrdering"], callback_data="submit_ordering")
             builder.adjust(2)
             text = question['question_text']
-            order = " → ".join(question['options'][i] for i in user_answer)
-            await callback.message.edit_text(
-                f"{text}\n\n{messages['tests']['yourOrder']} {order}",
-                reply_markup=builder.as_markup()
-            )
+            order = " → ".join(str(i+1) for i in user_answer)
+            opts = question.get('options') or []
+            options_text = "\n".join(f"{i+1}. {opt}" for i, opt in enumerate(opts))
+            full_text = f"{text}\n\n{options_text}\n\n{messages['tests']['yourOrder']} {order}"
+            await callback.message.edit_text(full_text, reply_markup=builder.as_markup())
         else:
             selected_answer = question['options'][number_of_answer] if number_of_answer < len(question['options']) else ''
             question['user_answer'] = selected_answer
