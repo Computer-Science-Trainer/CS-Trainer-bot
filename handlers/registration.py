@@ -87,6 +87,10 @@ def register_registration(dp):
     async def get_password_repeat(message: types.Message, state: FSMContext):
         data = await state.get_data()
         pwd = data.get('password')
+        if (not 8 <= len(pwd) < 32) or pwd.lower() == pwd or pwd.isalpha():
+            await message.answer(messages["registration"]["passwordError"])
+            await state.set_state(Registration.password)
+            return
         if message.text != pwd:
             await message.answer(messages["registration"]["passwordMismatch"])
             await state.set_state(Registration.password)
@@ -107,6 +111,7 @@ def register_registration(dp):
         except HTTPStatusError as err:
             if err.response.status_code == 400:
                 await message.answer(messages["registration"]["passwordError"])
+                await state.set_state(Registration.password)
                 return
             else:
                 await message.answer(messages["registration"]["connectionError"])
