@@ -24,7 +24,7 @@ def get_topics_keyboard():
                 text=f"⚙️ {messages['leaderboard']['showFundamentals']}")],
             [KeyboardButton(
                 text=f"🧮 {messages['leaderboard']['showAlgorithms']}")],
-            [KeyboardButton(text="🔙 Назад")]
+            [KeyboardButton(text=messages["main"]["back"])]
         ],
         resize_keyboard=True,
         one_time_keyboard=True
@@ -42,7 +42,7 @@ def generate_leaderboard_page(leaders: dict, topic_key: str, page: int):
     else:
         display_topic = messages['tests']['sections']['fundamentals']
         topic_emoji = "⚙️"
-    text = f"<b>{topic_emoji} {messages['leaderboard']['showing']}: {display_topic}</b> <i>(стр. {page+1}/{total_pages})</i>\n\n"
+    text = f"<b>{topic_emoji} {messages['leaderboard']['showing']}: {display_topic}</b> <i>({messages['leaderboard']['pageShort']} {page+1}/{total_pages})</i>\n\n"
     medals = ['🥇', '🥈', '🥉']
     for idx, u in enumerate(page_items, start=1):
         if page == 0 and idx <= 3:
@@ -64,12 +64,12 @@ def generate_leaderboard_page(leaders: dict, topic_key: str, page: int):
 
 
 def register_leaderboard(dp):
-    @dp.message(lambda m: m.text and m.text.strip() == "🏆 Таблица лидеров")
+    @dp.message(lambda m: m.text and m.text.strip() == messages["main"]["menuLeaderboard"])
     async def leaderboard_entrypoint(
             message: types.Message, state: FSMContext):
         await state.set_state(LeaderBoard.topic)
         await message.answer(
-            "<b>Выберите тему для просмотра таблицы лидеров:</b>",
+            messages["leaderboard"]["chooseTopicView"],
             reply_markup=get_topics_keyboard(),
             parse_mode="HTML"
         )
@@ -115,14 +115,14 @@ def register_leaderboard(dp):
         reply_kb = ReplyKeyboardMarkup(
             keyboard=[
                 [KeyboardButton(text=display_other)],
-                [KeyboardButton(text="🔙 Назад")]
+                [KeyboardButton(text=messages["main"]["back"])]
             ],
             resize_keyboard=True,
             one_time_keyboard=True
         )
         await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
         await message.answer(
-            "<i>Для смены темы используйте кнопки ниже:</i>",
+            messages["leaderboard"]["changeTopicHint"],
             reply_markup=reply_kb,
             parse_mode="HTML"
         )
@@ -136,10 +136,10 @@ def register_leaderboard(dp):
             new_topic = 'algorithms'
         elif message.text == f"⚙️ {messages['leaderboard']['showFundamentals']}":
             new_topic = 'fundamentals'
-        elif message.text == "🔙 Назад":
+        elif message.text == messages["main"]["back"]:
             from handlers.tests import get_main_reply_keyboard
             await state.clear()
-            await message.answer("Вы вернулись в главное меню.", reply_markup=get_main_reply_keyboard())
+            await message.answer(messages["main"]["backToMain"], reply_markup=get_main_reply_keyboard())
             return
         else:
             await message.answer(f"❗️ <b>{messages['leaderboard']['invalidTopic']}</b>", parse_mode="HTML")
@@ -160,7 +160,7 @@ def register_leaderboard(dp):
             topic_emoji = "⚙️"
         text = (
             f"<b>{topic_emoji} {messages['leaderboard']['showing']}: "
-            f"{display_topic}</b> <i>(стр. 1/{total_pages})</i>\n\n"
+            f"{display_topic}</b> <i>({messages['leaderboard']['pageShort']} 1/{total_pages})</i>\n\n"
         )
         medals = ['🥇', '🥈', '🥉']
         for idx, u in enumerate(page_items, start=1):
@@ -176,14 +176,14 @@ def register_leaderboard(dp):
         reply_kb = ReplyKeyboardMarkup(
             keyboard=[
                 [KeyboardButton(text=display_other)],
-                [KeyboardButton(text="🔙 Назад")]
+                [KeyboardButton(text=messages["main"]["back"])]
             ],
             resize_keyboard=True,
             one_time_keyboard=True
         )
         await message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
         await message.answer(
-            "<i>Для смены темы используйте кнопки ниже:</i>",
+            messages["leaderboard"]["changeTopicHint"],
             reply_markup=reply_kb,
             parse_mode="HTML"
         )

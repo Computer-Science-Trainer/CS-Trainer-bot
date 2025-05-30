@@ -22,31 +22,20 @@ class Tests(StatesGroup):
 def get_main_reply_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="📝 Тесты")],
-            [KeyboardButton(text="🏆 Таблица лидеров")],
-            [KeyboardButton(text="👤 Обо мне")]
+            [KeyboardButton(text=messages["main"]["menuTests"])],
+            [KeyboardButton(text=messages["main"]["menuLeaderboard"])],
+            [KeyboardButton(text=messages["main"]["menuMe"]) ]
         ],
         resize_keyboard=True
     )
 
 
-def get_main_keyboard():
-    builder = InlineKeyboardBuilder()
-    builder.button(
-        text="✨ Рекомендованные тесты",
-        callback_data="choose_recommended")
-    builder.button(text="📚 Все тесты", callback_data="choose_all")
-    builder.adjust(1)
-    return builder.as_markup()
-
-
 def get_tests_menu_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="✨ Рекомендации")],
-            [KeyboardButton(text="📚 Все тесты")],
-            [KeyboardButton(text="🔙 Назад")]
-        ],
+            [KeyboardButton(text=messages["tests"]["menuRecommendations"])],
+            [KeyboardButton(text=messages["tests"]["menuAllTests"])],
+            [KeyboardButton(text=messages["main"]["back"])]] ,
         resize_keyboard=True
     )
 
@@ -54,11 +43,11 @@ def get_tests_menu_keyboard():
 global_router = Router()
 
 
-@global_router.message(F.text == "🔙 Назад")
+@global_router.message(F.text == messages["main"]["back"])
 async def handle_back(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer(
-        "🔙 <b>Вы вернулись в главное меню.</b>",
+        messages["main"]["backToMain"],
         reply_markup=get_main_reply_keyboard(),
         parse_mode="HTML"
     )
@@ -66,7 +55,7 @@ async def handle_back(message: types.Message, state: FSMContext):
 
 
 def register_tests(dp):
-    @dp.message(F.text == "✨ Рекомендации")
+    @dp.message(F.text == messages["tests"]["menuRecommendations"])
     async def show_recommended_tests(
             message: types.Message, state: FSMContext):
         data = await state.get_data()
@@ -79,19 +68,17 @@ def register_tests(dp):
         recs = await api_get(f"user/{username}/recommendations")
         builder = InlineKeyboardBuilder()
         for rec in recs:
-            builder.button(
-                text=f"🌟 {rec.replace('_', ' ').capitalize()}",
-                callback_data=f"rec_{rec}"
-            )
+            label = messages["tests"]["topics"][rec]
+            builder.button(text=f"🌟 {label}", callback_data=f"rec_{rec}")
         builder.adjust(1)
         await message.answer(
-            "<b>✨ Рекомендованные тесты:</b>",
+            messages["tests"]["recommended"],
             reply_markup=builder.as_markup(),
             parse_mode="HTML"
         )
         await state.set_state(Tests.recommended_test)
 
-    @dp.message(F.text == "📚 Все тесты")
+    @dp.message(F.text == messages["tests"]["menuAllTests"])
     async def show_all_tests(message: types.Message, state: FSMContext):
         await send_sections_keyboard(message, state)
         await state.set_state(Tests.topic)
@@ -101,13 +88,13 @@ def register_tests(dp):
         topics = (await state.get_data()).get('all_topics', [])
         section = None
         for t in topics:
-            label = f"📖 {t.get('label', '').replace('_', ' ').capitalize()}"
+            label = f"📖 {messages['tests']['sections'][t.get('label')]}"
             if label.lower() == message.text.strip().lower():
                 section = t
                 break
         if not section:
             await message.answer(
-                "❗️ <b>Раздел не найден.</b>\nПожалуйста, выберите раздел из списка.",
+                messages["tests"]["sectionNotFound"],
                 reply_markup=get_main_reply_keyboard(),
                 parse_mode="HTML"
             )
@@ -124,54 +111,43 @@ def register_tests(dp):
         lines = []
         topic_number = offset + 1
         for i, item in enumerate(section.get('accordions', []), 1):
-            if isinstance(item, dict):
-                topic_label = item.get(
-                    'label', str(item)).replace(
-                    '_', ' ').capitalize()
-                lines.append(f"  {topic_number}. {topic_label}")
-                all_topics_flat.append(([topic_number], topic_label))
-                subtopics = item.get('accordions', [])
-                sub_number = 1
-                for j, sub in enumerate(subtopics, 1):
-                    if isinstance(sub, dict):
-                        sub_label = sub.get(
-                            'label', str(sub)).replace(
-                            '_', ' ').capitalize()
+            item_key = item.get('label', str(item))
+            topic_label = messages["tests"]["topics"][item_key]
+            lines.append(f"  {topic_label}")
+            all_topics_flat.append(([topic_number], topic_label))
+            subtopics = item.get('accordions', [])
+            sub_number = 1
+            for j, sub in enumerate(subtopics, 1):
+                if isinstance(sub, dict):
+                    sub_label = messages["tests"]["topics"][sub.get('label')]
+                    lines.append(
+                        f"    {sub_label}")
+                    all_topics_flat.append(
+                        ([topic_number, sub_number], sub_label))
+                    subsubtopics = sub.get('accordions', [])
+                    subsub_number = 1
+                    for k, subsub in enumerate(subsubtopics, 1):
+                        if isinstance(subsub, dict):
+                            subsub_label = messages["tests"]["topics"][subsub['label']]
+                        else:
+                            subsub_label = messages["tests"]["topics"][subsub]
                         lines.append(
-                            f"    {topic_number}.{sub_number}. {sub_label}")
+                            f"      {subsub_label}")
                         all_topics_flat.append(
-                            ([topic_number, sub_number], sub_label))
-                        subsubtopics = sub.get('accordions', [])
-                        subsub_number = 1
-                        for k, subsub in enumerate(subsubtopics, 1):
-                            subsub_label = str(subsub)
-                            if isinstance(subsub, dict):
-                                subsub_label = subsub.get('label', str(subsub))
-                            subsub_label = subsub_label.replace(
-                                '_', ' ').capitalize()
-                            lines.append(
-                                f"      {topic_number}.{sub_number}.{subsub_number}. {subsub_label}")
-                            all_topics_flat.append(
-                                ([topic_number, sub_number, subsub_number], subsub_label))
-                            subsub_number += 1
-                    else:
-                        sub_label = str(sub).replace('_', ' ').capitalize()
-                        lines.append(
-                            f"    {topic_number}.{sub_number}. {sub_label}")
-                        all_topics_flat.append(
-                            ([topic_number, sub_number], sub_label))
-                    sub_number += 1
-                topic_number += 1
-            else:
-                topic_label = str(item).replace('_', ' ').capitalize()
-                lines.append(f"  {topic_number}. {topic_label}")
-                all_topics_flat.append(([topic_number], topic_label))
-                topic_number += 1
-        msg = f"<b>📖 Темы раздела:</b> <i>{section.get('label', '').replace('_', ' ').capitalize()}</i>\n\n" + "\n".join(
-            lines)
+                            ([topic_number, sub_number, subsub_number], subsub_label))
+                        subsub_number += 1
+                else:
+                    sub_label = messages["tests"]["topics"][sub]
+                    lines.append(
+                        f"    {sub_label}")
+                    all_topics_flat.append(
+                        ([topic_number, sub_number], sub_label))
+                sub_number += 1
+            topic_number += 1
+        msg = messages["tests"]["sectionTopics"].format(section=messages['tests']['sections'][section['label']]) + "\n\n" + "\n".join(lines)
+        print(msg)
         await message.answer(
-            msg +
-            "\n\n<em>Напишите номер темы, подтемы или подподтемы (например: 2.1.3)</em>",
+            msg + "\n\n" + messages["tests"]["writeTopicNumber"],
             parse_mode="HTML"
         )
         await state.update_data(current_section=section, all_topics_flat=all_topics_flat)
@@ -186,7 +162,7 @@ def register_tests(dp):
             parts = [int(p) for p in parts]
         except ValueError:
             await message.answer(
-                "❗️ Введите корректный номер темы, например: <b>2</b> или <b>1.2</b> или <b>1.2.3</b>",
+                messages["tests"]["enterCorrectTopicNumber"],
                 parse_mode="HTML"
             )
             return
@@ -197,13 +173,13 @@ def register_tests(dp):
                 break
         if not found:
             await message.answer(
-                "❗️ Тема не найдена. Проверьте номер и попробуйте снова.",
+                messages["tests"]["topicNotFound"],
                 parse_mode="HTML"
             )
             return
         topic_id = label = found[1]
         await state.update_data(topic_id=topic_id)
-        await message.answer(f"✅ <b>Вы выбрали тему:</b> <i>{label}</i>", parse_mode="HTML")
+        await message.answer(messages["tests"]["topicChosen"].format(label=label), parse_mode="HTML")
         await start_test_by_topic(message, state, topic_id)
 
     async def start_test_by_topic(callback_or_message, state, topic_id):
@@ -261,7 +237,7 @@ def register_tests(dp):
             builder.button(text=answer, callback_data=f"answer_{num}")
         builder.adjust(1)
         if len(questions) > 1:
-            builder.button(text="Next ▶️", callback_data="nav_next")
+            builder.button(text=messages["tests"]["navNext"], callback_data="nav_next")
         builder.adjust(2)
         msg = await send(questions[0]['question_text'], reply_markup=builder.as_markup())
         await state.update_data(test_chat_id=msg.chat.id, test_message_id=msg.message_id)
@@ -276,9 +252,9 @@ def register_tests(dp):
             builder.button(text=answer, callback_data=f"answer_{num}")
         builder.adjust(1)
         if index > 0:
-            builder.button(text="◀️ Назад", callback_data="nav_prev")
+            builder.button(text=messages["tests"]["navPrev"], callback_data="nav_prev")
         if index < len(questions) - 1:
-            builder.button(text="Далее ▶️", callback_data="nav_next")
+            builder.button(text=messages["tests"]["navNext"], callback_data="nav_next")
         builder.adjust(2)
         text = question.get('question_text', '')
         chat_id = data['test_chat_id']
@@ -295,8 +271,8 @@ def register_tests(dp):
     async def handle_recommended_topic(
             callback: types.CallbackQuery, state: FSMContext):
         topic = callback.data[4:]
-        await state.update_data(topic_id=topic)
-        await callback.message.answer(f"Вы выбрали тест: {topic.replace('_', ' ').capitalize()}")
+        label = messages["tests"]["topics"][topic]
+        await callback.message.answer(messages["tests"]["recommendedTopicChosen"].format(label=label))
         await start_test_by_topic(callback, state, topic)
         await callback.answer()
 
@@ -324,7 +300,8 @@ def register_tests(dp):
                 builder.button(
                     text=f"{mark} {answer}",
                     callback_data=f"answer_{num}")
-            builder.button(text="Ответить", callback_data="submit_multi")
+            builder.button(text=messages["tests"]["submitMulti"], callback_data="submit_multi")
+            builder.adjust(1)
             builder.adjust(1)
             await callback.message.edit_text(question['question_text'], reply_markup=builder.as_markup())
         elif qtype == 'ordering':
@@ -341,12 +318,12 @@ def register_tests(dp):
                 mark = '✅' if num in user_answer else '◻️'
                 builder.button(text=f"{mark} {answer}", callback_data=f"answer_{num}")
             if len(user_answer) == len(question['options']):
-                builder.button(text="Ответить", callback_data="submit_ordering")
+                builder.button(text=messages["tests"]["submitOrdering"], callback_data="submit_ordering")
             builder.adjust(2)
             text = question['question_text']
             order = " → ".join(question['options'][i] for i in user_answer)
             await callback.message.edit_text(
-                f"{text}\n\nВаш порядок: {order}",
+                f"{text}\n\n{messages['tests']['yourOrder']} {order}",
                 reply_markup=builder.as_markup()
             )
         else:
@@ -420,7 +397,7 @@ def register_tests(dp):
             )
             name = data.get('site_username')
             await message.answer(
-                f"Разбор вашего теста доступен в Вашем профиле на сайте, войдя в личный кабинет: https://cs-trainer.netlify.app/{name}",
+                messages["tests"]["testReview"].format(name=name),
             )
         except HTTPStatusError:
             await message.answer(messages["tests"]["errors"]["loadErrorDescription"], reply_markup=get_main_reply_keyboard())
@@ -443,8 +420,8 @@ def register_tests(dp):
     async def handle_topic_choice(
             callback: types.CallbackQuery, state: FSMContext):
         topic_label = callback.data[6:]
-        await state.update_data(topic_id=topic_label)
-        await callback.message.answer(f"Вы выбрали тему: {topic_label.replace('_', ' ').capitalize()}")
+        label = messages["tests"]["topics"][topic_label]
+        await callback.message.answer(messages["tests"]["topicChosenShort"].format(label=label))
         await start_test_by_topic(callback, state, topic_label)
         await callback.answer()
 
@@ -454,22 +431,23 @@ def register_tests(dp):
             topics = await api_get("topics")
         except Exception:
             await message.answer(
-                "❌ <b>Ошибка получения списка всех тестов.</b>",
+                messages["tests"]["allTestsLoadError"],
                 reply_markup=get_main_reply_keyboard(),
                 parse_mode="HTML"
             )
             return
         await state.update_data(all_topics=topics)
-        section_buttons = [
-            KeyboardButton(
-                text=f"📖 {sec.get('label','').replace('_',' ').capitalize()}") for sec in topics]
+        section_buttons = []
+        for sec in topics:
+            sec_label = messages["tests"]["sections"][sec['label']]
+            section_buttons.append(KeyboardButton(text=f"📖 {sec_label}"))
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
                 [btn] for btn in section_buttons],
             resize_keyboard=True,
             one_time_keyboard=True)
         await message.answer(
-            "<b>Выберите раздел:</b>",
+            messages["tests"]["chooseSection"],
             reply_markup=keyboard,
             parse_mode="HTML"
         )

@@ -125,7 +125,7 @@ def register_registration(dp):
             await message.answer(messages["registration"]["registrationCompleted"], reply_markup=get_main_reply_keyboard())
             await state.clear()
         except HTTPStatusError:
-            await message.answer('Неверный код. Попробуйте снова.')
+            await message.answer(messages["registration"]["invalidCode"])
             await state.set_state(Registration.verification)
 
     @dp.callback_query(F.data == "forget_password")
@@ -175,14 +175,14 @@ def register_registration(dp):
 
     @dp.message(lambda m: m.text and m.text.strip() == "📝 Тесты")
     async def main_keyboard_tests(message: types.Message, state: FSMContext):
-        await message.answer("Выберите тип теста:", reply_markup=get_tests_menu_keyboard())
+        await message.answer(messages["registration"]["chooseTestType"], reply_markup=get_tests_menu_keyboard())
 
     @dp.message(lambda m: m.text and m.text.strip() == "🔙 Назад")
     async def leaderboard_back(message: types.Message, state: FSMContext):
         from handlers.tests import get_main_reply_keyboard
         await state.clear()
-        await message.answer("Вы вернулись в главное меню.", reply_markup=get_main_reply_keyboard())
+        await message.answer(messages["main"]["backToMain"], parse_mode="HTML", reply_markup=get_main_reply_keyboard())
 
-    @dp.message(lambda m: m.text and m.text.strip() == "👤 Обо мне")
+    @dp.message(lambda m: m.text and m.text.strip() == messages["main"]["menuMe"])
     async def main_keyboard_me(message: types.Message, state: FSMContext):
         await show_profile(message)
