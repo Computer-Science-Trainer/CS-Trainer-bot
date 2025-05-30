@@ -15,15 +15,17 @@ async def fetch_user_data(telegram_username):
 
 def build_profile_text(user, stats):
     bio = user.get('bio', '')
-    text = f"👤 <b>{user.get('username','')}</b>\n"
+    text = f"👤 <b>{user.get('username', '')}</b>\n"
     if bio:
         text += f"📝 {bio}\n\n"
     text += (
         f"<b>{messages['profile']['statsTitle']}</b>\n"
-        f"• {messages['profile']['passed']}: <b>{stats.get('passed',0)}</b> {messages['profile']['from']} <b>{stats.get('total',0)}</b> {messages['profile']['tasks']}\n"
-        f"• {messages['profile']['average']}: <b>{round(stats.get('average',0)*100,1)}%</b>\n"
-        f"• {messages['profile']['fundamentals']}: <b>{stats.get('fundamentals',0)}</b>\n"
-        f"• {messages['profile']['algorithms']}: <b>{stats.get('algorithms',0)}</b>\n"
+        f"• {messages['profile']['passed']}: <b>{stats.get('passed', 0)}</b> "
+        f"{messages['profile']['from']} <b>{stats.get('total', 0)}</b> "
+        f"{messages['profile']['tasks']}\n"
+        f"• {messages['profile']['average']}: <b>{round(stats.get('average', 0)*100, 1)}%</b>\n"
+        f"• {messages['profile']['fundamentals']}: <b>{stats.get('fundamentals', 0)}</b>\n"
+        f"• {messages['profile']['algorithms']}: <b>{stats.get('algorithms', 0)}</b>\n"
     )
     return text
 

@@ -6,9 +6,9 @@ from .api_client import api_post
 import logging
 from aiogram.fsm.state import State, StatesGroup
 from messages.locale import messages
-from handlers.tests import get_main_reply_keyboard, get_tests_menu_keyboard
-from handlers.user_info import show_profile
-import re  # for username validation
+from handlers.tests_handler import get_main_reply_keyboard, get_tests_menu_keyboard
+from handlers.userinfo_handler import show_profile
+import re
 
 
 MAX_USERNAME_LEN = 32
@@ -44,7 +44,8 @@ def register_registration(dp):
                 if token:
                     await state.update_data(jwt_token=token)
                 name = login.get('username', username)
-                await message.answer(messages["registration"]["loginWelcome"].format(name=name), reply_markup=get_main_reply_keyboard())
+                await message.answer(messages["registration"]["loginWelcome"].format(name=name),
+                                     reply_markup=get_main_reply_keyboard())
             else:
                 await state.update_data(telegram_username=username)
                 await message.answer(messages["registration"]["enterEmail"])
@@ -66,7 +67,8 @@ def register_registration(dp):
         username = data.get('telegram_username')
         password = message.text
         try:
-            await api_post('auth/link-telegram', {'telegram_username': username, 'email': email, 'password': password})
+            await api_post('auth/link-telegram', {'telegram_username': username, 'email': email,
+                                                  'password': password})
             await message.answer(messages["registration"]["emailBound"])
             await state.clear()
         except HTTPStatusError as err:
@@ -87,8 +89,10 @@ def register_registration(dp):
     @dp.message(Registration.name)
     async def get_name(message: types.Message, state: FSMContext):
         username_input = message.text.strip()
-        # Validate username: only Latin letters, digits, underscore or hyphen, length 4-32
-        if not re.match(r'^[A-Za-z0-9_-]+$', username_input) or len(username_input) < 4 or len(username_input) > 32:
+        # Validate username: only Latin letters, digits, underscore or hyphen,
+        # length 4-32
+        if not re.match(r'^[A-Za-z0-9_-]+$', username_input) or len(
+                username_input) < 4 or len(username_input) > 32:
             await message.answer(messages["registration"]["invalidUsername"])
             return
         await state.update_data(username=username_input)
@@ -140,7 +144,8 @@ def register_registration(dp):
         email = data.get('email')
         try:
             await api_post('auth/verify', {'email': email, 'code': message.text})
-            await message.answer(messages["registration"]["registrationCompleted"], reply_markup=get_main_reply_keyboard())
+            await message.answer(messages["registration"]["registrationCompleted"],
+                                 reply_markup=get_main_reply_keyboard())
             await state.clear()
         except HTTPStatusError:
             await message.answer(messages["registration"]["invalidCode"])
@@ -184,7 +189,8 @@ def register_registration(dp):
             token = resp.get('access_token') or resp.get('token')
             if token:
                 await state.update_data(jwt_token=token)
-                await message.answer(messages["registration"]["loginSuccess"], reply_markup=get_main_reply_keyboard())
+                await message.answer(messages["registration"]["loginSuccess"],
+                                     reply_markup=get_main_reply_keyboard())
             else:
                 await message.answer(messages["registration"]["tokenError"])
             await state.clear()
@@ -193,14 +199,17 @@ def register_registration(dp):
 
     @dp.message(lambda m: m.text and m.text.strip() == "📝 Тесты")
     async def main_keyboard_tests(message: types.Message, state: FSMContext):
-        await message.answer(messages["registration"]["chooseTestType"], reply_markup=get_tests_menu_keyboard())
+        await message.answer(messages["registration"]["chooseTestType"],
+                             reply_markup=get_tests_menu_keyboard())
 
     @dp.message(lambda m: m.text and m.text.strip() == "🔙 Назад")
     async def leaderboard_back(message: types.Message, state: FSMContext):
-        from handlers.tests import get_main_reply_keyboard
+        from handlers.tests_handler import get_main_reply_keyboard
         await state.clear()
-        await message.answer(messages["main"]["backToMain"], parse_mode="HTML", reply_markup=get_main_reply_keyboard())
+        await message.answer(messages["main"]["backToMain"], parse_mode="HTML",
+                             reply_markup=get_main_reply_keyboard())
 
-    @dp.message(lambda m: m.text and m.text.strip() == messages["main"]["menuMe"])
+    @dp.message(lambda m: m.text and m.text.strip()
+                == messages["main"]["menuMe"])
     async def main_keyboard_me(message: types.Message, state: FSMContext):
         await show_profile(message)

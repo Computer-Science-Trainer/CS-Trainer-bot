@@ -42,7 +42,8 @@ def generate_leaderboard_page(leaders: dict, topic_key: str, page: int):
     else:
         display_topic = messages['tests']['sections']['fundamentals']
         topic_emoji = "⚙️"
-    text = f"<b>{topic_emoji} {messages['leaderboard']['showing']}: {display_topic}</b> <i>({messages['leaderboard']['pageShort']} {page+1}/{total_pages})</i>\n\n"
+    text = f"<b>{topic_emoji} {messages['leaderboard']['showing']}: {display_topic}</b> \
+        <i>({messages['leaderboard']['pageShort']} {page+1}/{total_pages})</i>\n\n"
     medals = ['🥇', '🥈', '🥉']
     for idx, u in enumerate(page_items, start=1):
         if page == 0 and idx <= 3:
@@ -64,7 +65,8 @@ def generate_leaderboard_page(leaders: dict, topic_key: str, page: int):
 
 
 def register_leaderboard(dp):
-    @dp.message(lambda m: m.text and m.text.strip() == messages["main"]["menuLeaderboard"])
+    @dp.message(lambda m: m.text and m.text.strip() ==
+                messages["main"]["menuLeaderboard"])
     async def leaderboard_entrypoint(
             message: types.Message, state: FSMContext):
         await state.set_state(LeaderBoard.topic)
@@ -137,7 +139,7 @@ def register_leaderboard(dp):
         elif message.text == f"⚙️ {messages['leaderboard']['showFundamentals']}":
             new_topic = 'fundamentals'
         elif message.text == messages["main"]["back"]:
-            from handlers.tests import get_main_reply_keyboard
+            from handlers.tests_handler import get_main_reply_keyboard
             await state.clear()
             await message.answer(messages["main"]["backToMain"], reply_markup=get_main_reply_keyboard())
             return
@@ -147,7 +149,6 @@ def register_leaderboard(dp):
         leaders = data.get('leaders', {})
         items = leaders.get(new_topic, [])
         total_pages = (len(items) - 1) // PAGE_SIZE + 1
-        page = 0
         start = 0
         page_items = items[start:start + PAGE_SIZE]
         if new_topic == 'algorithms':

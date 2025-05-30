@@ -5,10 +5,10 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
-from handlers.registration import register_registration
-from handlers.leaderboard import register_leaderboard
-from handlers.tests import register_tests, global_router
-from handlers.user_info import register_userinfo
+from handlers.registration_handler import register_registration
+from handlers.leaderboard_handler import register_leaderboard
+from handlers.tests_handler import register_tests, global_router
+from handlers.userinfo_handler import register_userinfo
 from messages.locale import messages
 
 logging.basicConfig(level=logging.INFO)
@@ -26,9 +26,12 @@ register_tests(dp)
 register_userinfo(dp)
 dp.include_router(global_router)
 
+
 async def main():
     await bot.set_my_commands([
-        BotCommand(command="start", description=messages["main"]["commands"]["start"]),
+        BotCommand(
+            command="start",
+            description=messages["main"]["commands"]["start"]),
     ])
     await dp.start_polling(bot)
 
